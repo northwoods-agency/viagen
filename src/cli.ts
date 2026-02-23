@@ -160,7 +160,7 @@ function remoteBranchExists(
 
 /** Extract "owner/repo" from an HTTPS remote URL. */
 function repoNwo(remoteUrl: string): string | null {
-  const m = remoteUrl.match(/github\.com[/:]([^/]+\/[^/.]+?)(?:\.git)?$/);
+  const m = remoteUrl.match(/github\.com[/:]([^/]+\/[^/]+?)(?:\.git)?$/);
   return m ? m[1] : null;
 }
 
@@ -992,20 +992,25 @@ async function sync() {
     return;
   }
 
-  // Extract project metadata from env/git
-  const gitRemote = env["GIT_REMOTE_URL"];
-  const githubRepo = gitRemote ? repoNwo(gitRemote) : undefined;
+  // Extract project metadata from env/git, falling back to runtime detection
   const gitInfo = getGitInfo(cwd);
+  const gitRemote = env["GIT_REMOTE_URL"] || gitInfo?.remoteUrl;
+  const githubRepo = gitRemote ? repoNwo(gitRemote) : undefined;
   const gitBranch = env["GIT_BRANCH"] || gitInfo?.branch;
 
   console.log("");
   console.log("Syncing...");
+
+  const vercelProjectId = env["VERCEL_PROJECT_ID"];
+  const vercelOrgId = env["VERCEL_ORG_ID"];
 
   const syncInput = {
     ...(projectId ? { id: projectId } : {}),
     name: projectName!,
     ...(githubRepo ? { githubRepo } : {}),
     ...(gitBranch ? { gitBranch } : {}),
+    ...(vercelProjectId ? { vercelProjectId } : {}),
+    ...(vercelOrgId ? { vercelOrgId } : {}),
     secrets,
   };
 
