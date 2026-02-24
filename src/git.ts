@@ -145,9 +145,14 @@ async function findRepoRoot(cwd: string): Promise<string | null> {
   }
 }
 
+function repoNwo(remoteUrl: string): string | null {
+  const m = remoteUrl.match(/github\.com[/:]([^/]+\/[^/]+?)(?:\.git)?$/);
+  return m ? m[1] : null;
+}
+
 export function registerGitRoutes(
   server: ViteDevServer,
-  opts: { projectRoot: string },
+  opts: { projectRoot: string; env: Record<string, string> },
 ) {
   // Lazily resolved — the repo root may differ from the Vite project root
   // (e.g. `vite site` sets config.root to site/ but the repo root is parent)
@@ -197,6 +202,112 @@ export function registerGitRoutes(
       })
       .catch(() => {
         res.end(JSON.stringify({ files: [], git: false }));
+      });
+  });
+
+  // GET /via/git/branch — current branch, remote URL, open PR
+  let branchCache: {
+    data: Record<string, unknown>;
+    ts: number;
+  } | null = null;
+
+  server.middlewares.use("/via/git/branch", (req, res) => {
+    if (req.method !== "GET") {
+      res.statusCode = 405;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: "Method not allowed" }));
+      return;
+    }
+
+    res.setHeader("Content-Type", "application/json");
+
+    // Return cached result if fresh (30s)
+    if (branchCache && Date.now() - branchCache.ts < 30_000) {
+      res.end(JSON.stringify(branchCache.data));
+      return;
+    }
+
+    ensureGit()
+      .then(async (ctx) => {
+        if (!ctx) {
+          res.end(
+            JSON.stringify({
+              branch: null,
+              remoteUrl: null,
+              pr: null,
+              git: false,
+            }),
+          );
+          return;
+        }
+
+        const branchResult = await ctx.git.branch();
+        const branch = branchResult.current;
+
+        let remoteUrl: string | null = null;
+        try {
+          const raw = await ctx.git.remote(["get-url", "origin"]);
+          if (raw) remoteUrl = raw.trim().replace(/\.git$/, "");
+          // Normalize SSH URLs to HTTPS
+          if (remoteUrl?.startsWith("git@github.com:")) {
+            remoteUrl = remoteUrl
+              .replace("git@github.com:", "https://github.com/")
+              .replace(/\.git$/, "");
+          }
+        } catch {
+          // No remote configured
+        }
+
+        // Try to find an open PR for this branch
+        let pr: { number: number; url: string; title: string } | null = null;
+        const token = opts.env["GITHUB_TOKEN"];
+        const nwo = remoteUrl ? repoNwo(remoteUrl) : null;
+
+        if (token && nwo && branch) {
+          const owner = nwo.split("/")[0];
+          try {
+            const apiRes = await fetch(
+              `https://api.github.com/repos/${nwo}/pulls?head=${encodeURIComponent(owner + ":" + branch)}&state=open&per_page=1`,
+              {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  Accept: "application/vnd.github+json",
+                  "User-Agent": "viagen",
+                },
+              },
+            );
+            if (apiRes.ok) {
+              const pulls = (await apiRes.json()) as {
+                number: number;
+                html_url: string;
+                title: string;
+              }[];
+              if (pulls.length > 0) {
+                pr = {
+                  number: pulls[0].number,
+                  url: pulls[0].html_url,
+                  title: pulls[0].title,
+                };
+              }
+            }
+          } catch {
+            // PR detection is best-effort
+          }
+        }
+
+        const data = { branch, remoteUrl, pr, git: true };
+        branchCache = { data, ts: Date.now() };
+        res.end(JSON.stringify(data));
+      })
+      .catch(() => {
+        res.end(
+          JSON.stringify({
+            branch: null,
+            remoteUrl: null,
+            pr: null,
+            git: false,
+          }),
+        );
       });
   });
 

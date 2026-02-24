@@ -1379,6 +1379,9 @@ function help() {
     "  VIAGEN_AUTH_TOKEN      Protects all endpoints with token auth.",
   );
   console.log(
+    "  VIAGEN_MODEL           Override Claude model (e.g. sonnet, opus, haiku).",
+  );
+  console.log(
     "  VERCEL_TOKEN           Vercel access token (for sandbox).",
   );
   console.log(

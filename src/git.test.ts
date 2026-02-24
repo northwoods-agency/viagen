@@ -38,7 +38,7 @@ describe("git routes", () => {
     gitServer = createTestServer((app) => {
       registerGitRoutes(
         { middlewares: app } as import("vite").ViteDevServer,
-        { projectRoot: tempDir },
+        { projectRoot: tempDir, env: {} },
       );
     });
     await gitServer.start();
@@ -47,7 +47,7 @@ describe("git routes", () => {
     noGitServer = createTestServer((app) => {
       registerGitRoutes(
         { middlewares: app } as import("vite").ViteDevServer,
-        { projectRoot: noGitDir },
+        { projectRoot: noGitDir, env: {} },
       );
     });
     await noGitServer.start();

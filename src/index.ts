@@ -191,7 +191,7 @@ export function viagen(options?: ViagenOptions): Plugin {
         env,
         projectRoot,
         logBuffer,
-        model: opts.model,
+        model: env["VIAGEN_MODEL"] || opts.model,
         systemPrompt: options?.systemPrompt,
       });
 
@@ -207,7 +207,7 @@ export function viagen(options?: ViagenOptions): Plugin {
       }
 
       // Git routes (status + diff)
-      registerGitRoutes(server, { projectRoot });
+      registerGitRoutes(server, { projectRoot, env });
 
       // Log routes (dev server logs)
       registerLogRoutes(server, { logBuffer });

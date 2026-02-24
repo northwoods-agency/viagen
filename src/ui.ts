@@ -293,6 +293,39 @@ export function buildUiHtml(opts?: {
     }
     .send-btn:hover { background: #52525b; border-color: #71717a; }
     .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 12px;
+      font-family: ui-monospace, monospace;
+      font-size: 11px;
+      color: #52525b;
+      border-top: 1px solid #1e1e22;
+      flex-shrink: 0;
+    }
+    .status-bar span { cursor: pointer; transition: color 0.15s; }
+    .status-bar span:hover { color: #a1a1aa; }
+    .status-bar .d-add { color: #4ade80; }
+    .status-bar .d-del { color: #f87171; }
+    .changes-branch {
+      padding: 8px 12px;
+      font-family: ui-monospace, monospace;
+      font-size: 12px;
+      color: #a1a1aa;
+      border-bottom: 1px solid #1e1e22;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .changes-branch a {
+      color: #52525b;
+      text-decoration: none;
+      font-size: 11px;
+      transition: color 0.15s;
+    }
+    .changes-branch a:hover { color: #a1a1aa; }
     .tab-bar {
       display: flex;
       border-bottom: 1px solid #27272a;
@@ -474,11 +507,16 @@ export function buildUiHtml(opts?: {
       <input type="text" id="input" placeholder="What do you want to build?" autofocus />
       <button class="send-btn" id="send-btn">Send</button>
     </div>
+    ${hasGit ? '<div class="status-bar" id="status-bar" style="display:none;"><span id="status-branch"></span><span id="status-diff"></span></div>' : ""}
   </div>
   ${editor ? editor.html : ""}
   ${
     hasGit
       ? `<div id="changes-view" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+    <div class="changes-branch" id="changes-branch" style="display:none;">
+      <span id="changes-branch-name"></span>
+      <a id="changes-pr-link" target="_blank" style="display:none;"></a>
+    </div>
     <div class="changes-summary" id="changes-summary" style="display:none;">
       <span id="changes-stats"></span>
       <span style="flex:1;"></span>
@@ -1031,11 +1069,55 @@ export function buildUiHtml(opts?: {
         await loadHistory();
         startHistoryPolling();
 
-        // Check for changes on first load to show dot indicator
+        // Check for changes + branch info on first load
         if (data.git) {
           fetch('/via/git/status').then(function(r) { return r.json(); }).then(function(d) {
             var dot = document.getElementById('changes-dot');
             if (d.files && d.files.length > 0 && dot) dot.style.display = 'block';
+            // Update status bar diff summary
+            var statusDiff = document.getElementById('status-diff');
+            if (statusDiff && (d.insertions || d.deletions)) {
+              statusDiff.innerHTML = '<span class="d-add">+' + d.insertions + '</span> <span class="d-del">\\u2212' + d.deletions + '</span>';
+            }
+          }).catch(function() {});
+
+          fetch('/via/git/branch').then(function(r) { return r.json(); }).then(function(d) {
+            if (!d.branch) return;
+            var branchUrl = d.pr ? d.pr.url : (d.remoteUrl ? d.remoteUrl + '/tree/' + d.branch : null);
+            // Status bar
+            var statusBar = document.getElementById('status-bar');
+            var statusBranch = document.getElementById('status-branch');
+            if (statusBar && statusBranch) {
+              statusBar.style.display = 'flex';
+              statusBranch.textContent = '\\u2387 ' + d.branch;
+              if (branchUrl) {
+                statusBranch.addEventListener('click', function() { window.open(branchUrl, '_blank'); });
+              }
+            }
+            // Status diff click → switch to changes tab
+            var statusDiff = document.getElementById('status-diff');
+            if (statusDiff) {
+              statusDiff.addEventListener('click', function() {
+                var changesTab = document.querySelector('[data-tab="changes"]');
+                if (changesTab) changesTab.click();
+              });
+            }
+            // Changes tab branch header
+            var changesBranch = document.getElementById('changes-branch');
+            var changesBranchName = document.getElementById('changes-branch-name');
+            var changesPrLink = document.getElementById('changes-pr-link');
+            if (changesBranch && changesBranchName) {
+              changesBranch.style.display = 'flex';
+              changesBranchName.textContent = '\\u2387 ' + d.branch;
+              if (branchUrl && !d.pr) {
+                changesBranchName.innerHTML = '<a href="' + branchUrl + '" target="_blank" style="color:inherit;text-decoration:none;">' + '\\u2387 ' + escapeHtml(d.branch) + '</a>';
+              }
+            }
+            if (changesPrLink && d.pr) {
+              changesPrLink.style.display = 'inline';
+              changesPrLink.href = d.pr.url;
+              changesPrLink.textContent = '\\u2192 #' + d.pr.number + ' ' + d.pr.title;
+            }
           }).catch(function() {});
         }
 
@@ -1136,6 +1218,15 @@ export function buildUiHtml(opts?: {
           '<span class="stat-files">' + count + (count === 1 ? ' file' : ' files') + '</span>' +
           (ins > 0 ? ' <span class="stat-add">+' + ins + '</span>' : '') +
           (del > 0 ? ' <span class="stat-del">-' + del + '</span>' : '');
+        // Keep status bar diff in sync
+        var statusDiff = document.getElementById('status-diff');
+        if (statusDiff) {
+          if (ins || del) {
+            statusDiff.innerHTML = '<span class="d-add">+' + ins + '</span> <span class="d-del">\\u2212' + del + '</span>';
+          } else {
+            statusDiff.innerHTML = '';
+          }
+        }
       }
 
       function renderChanges(files) {
