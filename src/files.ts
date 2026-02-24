@@ -120,6 +120,52 @@ export function registerFileRoutes(
     opts.projectRoot,
   );
 
+  const MIME_TYPES: Record<string, string> = {
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    svg: "image/svg+xml",
+    webp: "image/webp",
+    ico: "image/x-icon",
+    bmp: "image/bmp",
+  };
+
+  server.middlewares.use("/via/file/raw", (req, res) => {
+    if (req.method !== "GET") {
+      res.statusCode = 405;
+      res.end("Method not allowed");
+      return;
+    }
+    const url = new URL(
+      req.url ?? "/",
+      `http://${req.headers.host ?? "localhost"}`,
+    );
+    const filePath = url.searchParams.get("path");
+    if (!filePath) {
+      res.statusCode = 400;
+      res.end("Missing path parameter");
+      return;
+    }
+    if (!isPathAllowed(filePath, resolvedPatterns, opts.projectRoot)) {
+      res.statusCode = 403;
+      res.end("Path not in editable list");
+      return;
+    }
+    const abs = resolve(opts.projectRoot, filePath);
+    const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
+    const mime = MIME_TYPES[ext] ?? "application/octet-stream";
+    try {
+      const data = readFileSync(abs);
+      res.setHeader("Content-Type", mime);
+      res.setHeader("Cache-Control", "no-cache");
+      res.end(data);
+    } catch {
+      res.statusCode = 404;
+      res.end("File not found");
+    }
+  });
+
   server.middlewares.use("/via/files", (req, res) => {
     if (req.method !== "GET") {
       res.statusCode = 405;

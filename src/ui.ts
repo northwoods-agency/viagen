@@ -1,3 +1,5 @@
+import { buildEditorModule } from "./editor";
+
 export function buildUiHtml(opts?: {
   editable?: boolean;
   git?: boolean;
@@ -5,13 +7,19 @@ export function buildUiHtml(opts?: {
   const hasEditor = opts?.editable ?? false;
   const hasGit = opts?.git ?? false;
   const hasTabs = true; // Logs tab is always present
+  const editor = hasEditor ? buildEditorModule() : null;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>viagen</title>
+  ${hasEditor ? `<script data-manual src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"><\/script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"><\/script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"><\/script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markdown.min.js"><\/script>` : ""}
   <style>
+    ${editor ? editor.css : ""}
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: system-ui, -apple-system, sans-serif;
@@ -308,99 +316,6 @@ export function buildUiHtml(opts?: {
     .tab:last-child { border-right: none; }
     .tab:hover { color: #a1a1aa; }
     .tab.active { color: #e4e4e7; border-bottom-color: #e4e4e7; }
-    .file-dir-header {
-      padding: 6px 16px;
-      font-family: ui-monospace, monospace;
-      font-size: 11px;
-      font-weight: 600;
-      color: #52525b;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      background: #09090b;
-      position: sticky;
-      top: 0;
-    }
-    .file-item {
-      padding: 8px 16px;
-      font-family: ui-monospace, monospace;
-      font-size: 12px;
-      color: #a1a1aa;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      transition: background 0.1s;
-      border-bottom: 1px solid #1e1e22;
-    }
-    .file-item:hover { background: #18181b; color: #e4e4e7; }
-    .file-item .file-path { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .editor-header {
-      padding: 8px 12px;
-      border-bottom: 1px solid #27272a;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-shrink: 0;
-      background: #18181b;
-    }
-    .editor-back {
-      background: none;
-      border: none;
-      color: #a1a1aa;
-      font-size: 16px;
-      cursor: pointer;
-      padding: 2px 6px;
-      line-height: 1;
-    }
-    .editor-back:hover { color: #e4e4e7; }
-    .editor-filename {
-      flex: 1;
-      font-family: ui-monospace, monospace;
-      font-size: 12px;
-      color: #d4d4d8;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .editor-wrap {
-      flex: 1;
-      position: relative;
-      overflow: hidden;
-    }
-    .editor-textarea {
-      width: 100%;
-      height: 100%;
-      background: #09090b;
-      color: #d4d4d8;
-      border: none;
-      padding: 8px 12px 8px 48px;
-      font-family: ui-monospace, monospace;
-      font-size: 12px;
-      line-height: 1.6;
-      resize: none;
-      outline: none;
-      tab-size: 2;
-      white-space: pre;
-      overflow: auto;
-    }
-    .line-numbers {
-      position: absolute;
-      left: 0;
-      top: 0;
-      bottom: 0;
-      width: 40px;
-      padding: 8px 8px 8px 0;
-      font-family: ui-monospace, monospace;
-      font-size: 12px;
-      line-height: 1.6;
-      color: #3f3f46;
-      text-align: right;
-      user-select: none;
-      pointer-events: none;
-      overflow: hidden;
-      background: #0a0a0c;
-      border-right: 1px solid #1e1e22;
-    }
     .changes-file {
       padding: 8px 16px;
       font-family: ui-monospace, monospace;
@@ -560,26 +475,7 @@ export function buildUiHtml(opts?: {
       <button class="send-btn" id="send-btn">Send</button>
     </div>
   </div>
-  ${
-    hasEditor
-      ? `<div id="files-view" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
-    <div id="file-list-view" style="flex:1;overflow-y:auto;">
-      <div id="file-list" style="padding:0;"></div>
-    </div>
-    <div id="file-editor-view" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
-      <div class="editor-header">
-        <button class="editor-back" id="editor-back" title="Back to files">&#x2190;</button>
-        <span class="editor-filename" id="editor-filename"></span>
-        <button class="btn" id="editor-save" disabled>Save</button>
-      </div>
-      <div class="editor-wrap" id="editor-wrap">
-        <div class="line-numbers" id="line-numbers"></div>
-        <textarea id="editor-textarea" class="editor-textarea" spellcheck="false"></textarea>
-      </div>
-    </div>
-  </div>`
-      : ""
-  }
+  ${editor ? editor.html : ""}
   ${
     hasGit
       ? `<div id="changes-view" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
@@ -1186,158 +1082,7 @@ export function buildUiHtml(opts?: {
     }
 
     // ── File editor panel ──
-    ${
-      hasEditor
-        ? `
-    (function() {
-      var fileListView = document.getElementById('file-list-view');
-      var fileEditorView = document.getElementById('file-editor-view');
-      var editorTextarea = document.getElementById('editor-textarea');
-      var lineNumbersEl = document.getElementById('line-numbers');
-      var editorWrap = document.getElementById('editor-wrap');
-      var editorSave = document.getElementById('editor-save');
-      var editorFilename = document.getElementById('editor-filename');
-
-      var editorState = { path: '', original: '', modified: false };
-
-      // File list
-      window._viagenLoadFiles = loadFileList;
-      async function loadFileList() {
-        var listEl = document.getElementById('file-list');
-        listEl.innerHTML = '<div style="padding:16px;color:#52525b;font-size:12px;font-family:ui-monospace,monospace;">Loading...</div>';
-        try {
-          var res = await fetch('/via/files');
-          var data = await res.json();
-          renderFileList(data.files);
-        } catch(e) {
-          listEl.innerHTML = '<div style="padding:16px;color:#f87171;font-size:12px;">Failed to load files</div>';
-        }
-      }
-
-      function renderFileList(files) {
-        var listEl = document.getElementById('file-list');
-        listEl.innerHTML = '';
-        if (files.length === 0) {
-          listEl.innerHTML = '<div style="padding:16px;color:#52525b;font-size:12px;">No editable files configured</div>';
-          return;
-        }
-        var groups = {};
-        files.forEach(function(f) {
-          var parts = f.split('/');
-          var dir = parts.length > 1 ? parts.slice(0, -1).join('/') : '.';
-          if (!groups[dir]) groups[dir] = [];
-          groups[dir].push(f);
-        });
-        Object.keys(groups).sort().forEach(function(dir) {
-          var header = document.createElement('div');
-          header.className = 'file-dir-header';
-          header.textContent = dir === '.' ? 'root' : dir;
-          listEl.appendChild(header);
-          groups[dir].forEach(function(filePath) {
-            var item = document.createElement('div');
-            item.className = 'file-item';
-            var name = filePath.split('/').pop();
-            item.innerHTML = '<span style="color:#52525b;font-size:10px;">&#9634;</span><span class="file-path" title="' + escapeHtml(filePath) + '">' + escapeHtml(name) + '</span>';
-            item.addEventListener('click', function() { openFile(filePath); });
-            listEl.appendChild(item);
-          });
-        });
-      }
-
-      // Open file in editor
-      async function openFile(path) {
-        fileListView.style.display = 'none';
-        fileEditorView.style.display = 'flex';
-        editorFilename.textContent = path;
-        editorSave.disabled = true;
-        editorSave.textContent = 'Save';
-
-        try {
-          var res = await fetch('/via/file?path=' + encodeURIComponent(path));
-          var data = await res.json();
-          editorState = { path: path, original: data.content, modified: false };
-          editorTextarea.value = data.content;
-          updateLineNumbers();
-        } catch(e) {
-          editorTextarea.value = '// Error loading file';
-          updateLineNumbers();
-        }
-      }
-
-      // Line numbers
-      function updateLineNumbers() {
-        var lines = editorTextarea.value.split('\\n').length;
-        var nums = '';
-        for (var i = 1; i <= lines; i++) nums += i + '\\n';
-        lineNumbersEl.textContent = nums;
-      }
-
-      function markModified() {
-        editorState.modified = (editorTextarea.value !== editorState.original);
-        editorSave.disabled = !editorState.modified;
-      }
-
-      // Textarea handling
-      editorTextarea.addEventListener('keydown', function(e) {
-        if (e.key === 'Tab') {
-          e.preventDefault();
-          var start = this.selectionStart;
-          var end = this.selectionEnd;
-          this.value = this.value.substring(0, start) + '  ' + this.value.substring(end);
-          this.selectionStart = this.selectionEnd = start + 2;
-          updateLineNumbers();
-          markModified();
-        }
-      });
-      editorTextarea.addEventListener('input', function() {
-        updateLineNumbers();
-        markModified();
-      });
-      editorTextarea.addEventListener('scroll', function() {
-        lineNumbersEl.scrollTop = this.scrollTop;
-      });
-
-      // Save
-      editorSave.addEventListener('click', async function() {
-        editorSave.disabled = true;
-        editorSave.textContent = 'Saving...';
-        var content = editorTextarea.value;
-        try {
-          var res = await fetch('/via/file', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: editorState.path, content: content }),
-          });
-          var data = await res.json();
-          if (data.status === 'ok') {
-            editorState.original = content;
-            editorState.modified = false;
-            editorSave.textContent = 'Saved';
-            setTimeout(function() { editorSave.textContent = 'Save'; }, 1500);
-          } else {
-            editorSave.textContent = 'Error';
-            setTimeout(function() { editorSave.textContent = 'Save'; editorSave.disabled = false; }, 2000);
-          }
-        } catch(e) {
-          editorSave.textContent = 'Error';
-          setTimeout(function() { editorSave.textContent = 'Save'; editorSave.disabled = false; }, 2000);
-        }
-      });
-
-      // Back button
-      document.getElementById('editor-back').addEventListener('click', function() {
-        if (editorState.modified) {
-          if (!confirm('Discard unsaved changes?')) return;
-        }
-        fileEditorView.style.display = 'none';
-        fileListView.style.display = 'block';
-        loadFileList();
-      });
-
-    })();
-    `
-        : ""
-    }
+    ${editor ? editor.js : ""}
 
     // ── Changes panel (git diff) ──
     ${
