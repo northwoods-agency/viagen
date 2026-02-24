@@ -23,7 +23,6 @@ describe("chat routes — validation", () => {
       projectRoot: "/tmp/fake",
       logBuffer,
       model: "sonnet",
-      claudeBin: "/nonexistent/claude",
     });
     registerChatRoutes(fakeServer, session, { env });
   });
@@ -69,7 +68,6 @@ describe("chat routes — body validation", () => {
       projectRoot: "/tmp/fake",
       logBuffer,
       model: "sonnet",
-      claudeBin: "/nonexistent/claude",
     });
     registerChatRoutes(fakeServer, session, { env });
   });
@@ -110,7 +108,6 @@ describe("chat routes — history", () => {
       projectRoot,
       logBuffer,
       model: "sonnet",
-      claudeBin: "/nonexistent/claude",
     });
     registerChatRoutes(fakeServer, session, { env });
   });
