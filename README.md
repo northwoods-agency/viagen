@@ -122,7 +122,7 @@ viagen({
 })
 ```
 
-Paths can be files or directories (directories include all files within). The editor appears as a "Files" tab in the chat panel.
+Paths can be files or directories (directories include all files within). The editor appears as a "Files" tab in the chat panel with a collapsible directory tree, syntax highlighting (TypeScript, JavaScript, CSS, HTML, JSON, Markdown), and image preview.
 
 The default system prompt tells Claude it's embedded in a Vite dev server, that file edits trigger HMR, and how to check server logs. Recent build errors are automatically appended to give Claude context about what went wrong.
 
@@ -154,6 +154,7 @@ GET  /via/iframe      — split view (app + chat side by side)
 GET  /via/files       — list editable files (when configured)
 GET  /via/file?path=  — read file content
 POST /via/file        — write file content { path, content }
+GET  /via/file/raw    — serve raw file (images, etc.) with correct MIME type
 GET  /via/git/status  — list changed files (git status)
 GET  /via/git/diff    — full diff, or single file with ?path=
 GET  /via/logs        — dev server log entries, optional ?since=<timestamp>
