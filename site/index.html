@@ -64,13 +64,31 @@
                 padding: 80px 24px 48px;
                 position: relative;
             }
+            @keyframes gradient-shift {
+                0%   { background-position: 0% 50%; }
+                100% { background-position: 100% 50%; }
+            }
             h1 {
                 font-family: ui-monospace, monospace;
                 font-size: 32px;
                 font-weight: 700;
                 letter-spacing: -0.02em;
                 margin-bottom: 4px;
-                color: var(--text);
+                background: linear-gradient(
+                    90deg,
+                    #ff0080,
+                    #ff8000,
+                    #ffee00,
+                    #00ff88,
+                    #00cfff,
+                    #8000ff,
+                    #ff0080
+                );
+                background-size: 400% 100%;
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
+                animation: gradient-shift 3s linear infinite;
             }
             .etymology {
                 font-family: ui-monospace, monospace;
@@ -421,11 +439,13 @@ export default defineConfig({
                         line-height: 1.8;
                     "
                 >
-                    The setup wizard authenticates with Claude then uses github
-                    and vercel to write your local
+                    The setup wizard authenticates with Claude, detects your
+                    GitHub and Vercel credentials, and captures your git remote
+                    info — all written to your local
                     <code style="font-size: 12px; color: var(--code-text)"
                         >.env</code
-                    >.
+                    >. This ensures sandboxes clone the correct repo instead of
+                    inferring it at runtime.
                 </p>
                 <p
                     style="
@@ -440,43 +460,7 @@ export default defineConfig({
                         >npm run dev</code
                     >
                     to start the local dev server. At this point you can launch
-                    viagen and chat with Claude to make changes do your app.
-                </p>
-            </section>
-
-            <section>
-                <h2>SSR Frameworks</h2>
-                <p
-                    style="
-                        font-size: 15px;
-                        color: var(--text-muted);
-                        line-height: 1.8;
-                    "
-                >
-                    For plain Vite apps, the chat panel is injected
-                    automatically. SSR frameworks (React Router, Remix,
-                    SvelteKit, etc.) render their own HTML, so add one script
-                    tag to your root layout:
-                </p>
-                <pre
-                    style="margin-top: 12px"
-                ><code>&lt;script src="/via/client.js" defer&gt;&lt;/script&gt;</code></pre>
-                <p
-                    style="
-                        font-size: 15px;
-                        color: var(--text-muted);
-                        line-height: 1.8;
-                        margin-top: 12px;
-                    "
-                >
-                    For React Router, add it to
-                    <code style="font-size: 12px; color: var(--code-text)"
-                        >app/root.tsx</code
-                    >
-                    inside the
-                    <code style="font-size: 12px; color: var(--code-text)"
-                        >&lt;head&gt;</code
-                    >.
+                    viagen and chat with Claude to make changes to your app.
                 </p>
             </section>
 
@@ -509,6 +493,9 @@ npx viagen sandbox --branch feature/my-thing
 # Set a longer timeout (default: 30 min)
 npx viagen sandbox --timeout 60
 
+# Auto-send a prompt on load
+npx viagen sandbox --prompt "build me a landing page"
+
 # Stop a running sandbox
 npx viagen sandbox stop &lt;sandboxId&gt;</code></pre>
             </section>
@@ -522,9 +509,136 @@ npx viagen sandbox stop &lt;sandboxId&gt;</code></pre>
   overlay: true,             // fix button on error overlay
   ui: true,                  // inject chat panel into pages
   sandboxFiles: [...],       // copy files manually into sandbox
-  editable: ['src'],         // files/dirs editable in the UI
+  editable: ['src','conf'],  // files/dirs editable in the UI
   systemPrompt: '...',       // custom system prompt (see below)
 })</code></pre>
+            </section>
+
+            <section>
+                <h2>SSR Frameworks</h2>
+                <p
+                    style="
+                        font-size: 15px;
+                        color: var(--text-muted);
+                        line-height: 1.8;
+                    "
+                >
+                    For plain Vite apps, the chat panel is injected
+                    automatically. SSR frameworks (React Router, Remix,
+                    SvelteKit, etc.) render their own HTML, so add one script
+                    tag to your root layout:
+                </p>
+                <pre
+                    style="margin-top: 12px"
+                ><code>&lt;script src="/via/client.js" defer&gt;&lt;/script&gt;</code></pre>
+                <p
+                    style="
+                        font-size: 15px;
+                        color: var(--text-muted);
+                        line-height: 1.8;
+                        margin-top: 12px;
+                    "
+                >
+                    For React Router, add it to
+                    <code style="font-size: 12px; color: var(--code-text)"
+                        >app/root.tsx</code
+                    >:
+                </p>
+                <!-- prettier-ignore -->
+                <div class="codeblock" style="margin-top: 12px">
+                    <button
+                        onclick="navigator.clipboard.writeText(`export default function Root() {\n  return (\n    &lt;html&gt;\n      &lt;head&gt;\n        &lt;script src=&quot;/via/client.js&quot; defer /&gt;\n        {/* ... */}\n      &lt;/head&gt;\n      {/* ... */}\n    &lt;/html&gt;\n  )\n}`).then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})"
+                    >
+                        Copy
+                    </button>
+                    <pre><code>export default function Root() {
+  return (
+    &lt;html&gt;
+      &lt;head&gt;
+        &lt;script src="/via/client.js" defer /&gt;
+        {/* ... */}
+      &lt;/head&gt;
+      {/* ... */}
+    &lt;/html&gt;
+  )
+}</code></pre>
+                </div>
+            </section>
+
+            <section>
+                <h2>Editable Files</h2>
+                <p
+                    style="
+                        font-size: 15px;
+                        color: var(--text-muted);
+                        line-height: 1.8;
+                    "
+                >
+                    Add a file editor panel to the chat UI:
+                </p>
+                <div class="codeblock" style="margin-top: 12px">
+                    <button
+                        onclick="navigator.clipboard.writeText(`viagen({\n  editable: ['src/components', 'vite.config.ts']\n})`).then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})"
+                    >
+                        Copy
+                    </button>
+                    <pre><code>viagen({
+  editable: ['src/components', 'vite.config.ts']
+})</code></pre>
+                </div>
+                <p
+                    style="
+                        font-size: 15px;
+                        color: var(--text-muted);
+                        line-height: 1.8;
+                        margin-top: 12px;
+                    "
+                >
+                    Paths can be files or directories (directories include all
+                    files within). The editor appears as a "Files" tab in the
+                    chat panel.
+                </p>
+                <p
+                    style="
+                        font-size: 15px;
+                        color: var(--text-muted);
+                        line-height: 1.8;
+                        margin-top: 12px;
+                    "
+                >
+                    The default system prompt tells Claude it's embedded in a
+                    Vite dev server, that file edits trigger HMR, and how to
+                    check server logs. Recent build errors are automatically
+                    appended to give Claude context about what went wrong.
+                </p>
+                <p
+                    style="
+                        font-size: 15px;
+                        color: var(--text-muted);
+                        line-height: 1.8;
+                        margin-top: 12px;
+                    "
+                >
+                    To customize the prompt, replace it entirely or extend the
+                    default:
+                </p>
+                <div class="codeblock" style="margin-top: 12px">
+                    <button
+                        onclick="navigator.clipboard.writeText(`import { viagen, DEFAULT_SYSTEM_PROMPT } from 'viagen'\n\nviagen({\n  // Replace entirely\n  systemPrompt: 'You are a React expert. Only use TypeScript.',\n\n  // Or extend the default\n  systemPrompt: DEFAULT_SYSTEM_PROMPT + '\\nAlways use Tailwind for styling.',\n})`).then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})"
+                    >
+                        Copy
+                    </button>
+                    <!-- prettier-ignore -->
+                    <pre><code>import { viagen, DEFAULT_SYSTEM_PROMPT } from 'viagen'
+
+viagen({
+  // Replace entirely
+  systemPrompt: 'You are a React expert. Only use TypeScript.',
+
+  // Or extend the default
+  systemPrompt: DEFAULT_SYSTEM_PROMPT + '\nAlways use Tailwind for styling.',
+})</code></pre>
+                </div>
             </section>
 
             <section>

@@ -19,33 +19,13 @@ export function buildIframeHtml(opts: { panelWidth: number }): string {
       position: relative;
     }
     #divider:hover, #divider.active { background: #3f3f46; }
-    #collapse-btn {
-      position: absolute;
-      top: 8px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 22px;
-      height: 22px;
-      border-radius: 4px;
-      background: #27272a;
-      border: 1px solid #3f3f46;
-      color: #a1a1aa;
-      font-size: 11px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1;
-      transition: background 0.15s, color 0.15s;
-    }
-    #collapse-btn:hover { background: #3f3f46; color: #e4e4e7; }
     #chat-frame { width: ${pw}px; border: none; height: 100%; min-width: 280px; }
     .dragging iframe { pointer-events: none; }
   </style>
 </head>
 <body>
   <iframe id="app-frame" src="/?_viagen_embed=1"></iframe>
-  <div id="divider"><button id="collapse-btn" title="App only">&#x2715;</button></div>
+  <div id="divider"></div>
   <iframe id="chat-frame" src="/via/ui"></iframe>
   <script>
     // Relay postMessage from app iframe to chat iframe (e.g. "Fix This Error")
@@ -58,12 +38,6 @@ export function buildIframeHtml(opts: { panelWidth: number }): string {
     var chatFrame = document.getElementById('chat-frame');
     chatFrame.addEventListener('load', function() {
       chatFrame.contentWindow.postMessage({ type: 'viagen:context', iframe: true }, '*');
-    });
-
-    // Collapse to app-only view
-    document.getElementById('collapse-btn').addEventListener('click', function(e) {
-      e.stopPropagation();
-      window.location.href = '/';
     });
 
     // Drag-resizable divider

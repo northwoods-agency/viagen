@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { loadEnv, type Plugin } from "vite";
 import { LogBuffer, wrapLogger } from "./logger";
 import { registerHealthRoutes, type ViteError } from "./health";
-import { findClaudeBin, registerChatRoutes, ChatSession } from "./chat";
+import { registerChatRoutes, ChatSession } from "./chat";
 import { buildClientScript } from "./overlay";
 import { buildUiHtml } from "./ui";
 import { buildIframeHtml } from "./iframe";
@@ -56,7 +56,6 @@ export function viagen(options?: ViagenOptions): Plugin {
 
   let env: Record<string, string>;
   let projectRoot: string;
-  let claudeBin: string;
   let lastError: ViteError | null = null;
   let promptSent = false;
   let branchCheckedOut = false;
@@ -73,7 +72,6 @@ export function viagen(options?: ViagenOptions): Plugin {
     configResolved(config) {
       env = loadEnv(config.mode, config.envDir ?? config.root, "");
       projectRoot = config.root;
-      claudeBin = findClaudeBin();
       logBuffer.init(projectRoot);
       wrapLogger(config.logger, logBuffer);
 
@@ -194,7 +192,6 @@ export function viagen(options?: ViagenOptions): Plugin {
         projectRoot,
         logBuffer,
         model: opts.model,
-        claudeBin,
         systemPrompt: options?.systemPrompt,
       });
 

@@ -1,16 +1,16 @@
-import { spawn, type ChildProcess } from "node:child_process";
-import { createRequire } from "node:module";
-import {
-  readFileSync,
-  writeFileSync,
-  appendFileSync,
-  existsSync,
-} from "node:fs";
+import { readFileSync, writeFileSync, appendFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import type { IncomingMessage } from "node:http";
 import type { ViteDevServer } from "vite";
+import {
+  query,
+  type Query,
+  type SDKMessage,
+  type SDKUserMessage,
+} from "@anthropic-ai/claude-agent-sdk";
 import type { LogBuffer } from "./logger";
 import { refreshAccessToken } from "./oauth";
+import { AsyncQueue } from "./async-queue";
 
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -30,12 +30,6 @@ export const DEFAULT_SYSTEM_PROMPT = `
   Be concise.
 `;
 
-export function findClaudeBin(): string {
-  const _require = createRequire(import.meta.url);
-  const pkgPath = _require.resolve("@anthropic-ai/claude-code/package.json");
-  return pkgPath.replace("package.json", "cli.js");
-}
-
 export interface ChatEvent {
   type: "text" | "tool_use" | "tool_result" | "error" | "done";
   text?: string;
@@ -48,18 +42,29 @@ interface ChatSessionOpts {
   projectRoot: string;
   logBuffer: LogBuffer;
   model: string;
-  claudeBin: string;
   systemPrompt?: string;
 }
 
 /**
- * Shared chat session — spawns Claude Code CLI processes and manages
- * session continuity. Used by both the HTTP endpoint and auto-prompt.
+ * Shared chat session — uses the Claude Agent SDK streaming input mode
+ * to maintain a persistent agent process across messages.
  */
 export class ChatSession {
   private sessionId: string | undefined;
   private chatLogPath: string;
   private opts: ChatSessionOpts;
+
+  // SDK query lifecycle
+  private activeQuery: Query | null = null;
+  private messageQueue: AsyncQueue<SDKUserMessage> | null = null;
+  private queryConsumerRunning = false;
+
+  // Event routing — connects SDK events to the current SSE response
+  private currentEventSink: ((event: ChatEvent) => void) | null = null;
+  private currentDoneResolve: (() => void) | null = null;
+
+  // Track auth token to detect refresh requiring query recreation
+  private lastUsedToken: string | undefined;
 
   constructor(opts: ChatSessionOpts) {
     this.opts = opts;
@@ -68,6 +73,11 @@ export class ChatSession {
 
   reset() {
     this.sessionId = undefined;
+    this.destroyQuery();
+  }
+
+  destroy() {
+    this.destroyQuery();
   }
 
   getHistory(): Array<Record<string, unknown>> {
@@ -136,9 +146,228 @@ export class ChatSession {
   }
 
   /**
+   * Lazily create the SDK query on first use. Recreates if the auth token
+   * changed (e.g. after OAuth refresh) or if the previous query ended.
+   */
+  private ensureQuery(): void {
+    const currentToken =
+      this.opts.env["CLAUDE_ACCESS_TOKEN"] ||
+      this.opts.env["ANTHROPIC_API_KEY"];
+
+    if (
+      this.activeQuery &&
+      this.queryConsumerRunning &&
+      this.lastUsedToken === currentToken
+    ) {
+      return;
+    }
+
+    // Token changed or query not running — (re)create
+    if (this.activeQuery) this.destroyQuery();
+
+    this.lastUsedToken = currentToken;
+    this.messageQueue = new AsyncQueue<SDKUserMessage>();
+
+    // Build environment for the SDK
+    const sdkEnv: Record<string, string | undefined> = {
+      ...(process.env as Record<string, string>),
+      CLAUDECODE: "",
+    };
+
+    const hasApiKey = !!this.opts.env["ANTHROPIC_API_KEY"];
+    const hasOAuthToken = !!this.opts.env["CLAUDE_ACCESS_TOKEN"];
+    if (hasApiKey) {
+      sdkEnv["ANTHROPIC_API_KEY"] = this.opts.env["ANTHROPIC_API_KEY"];
+    } else if (hasOAuthToken) {
+      sdkEnv["CLAUDE_CODE_OAUTH_TOKEN"] =
+        this.opts.env["CLAUDE_ACCESS_TOKEN"];
+    }
+
+    const systemPrompt = this.opts.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+
+    this.activeQuery = query({
+      prompt: this.messageQueue,
+      options: {
+        model: this.opts.model,
+        permissionMode: "bypassPermissions",
+        allowDangerouslySkipPermissions: true,
+        cwd: this.opts.projectRoot,
+        env: sdkEnv,
+        systemPrompt: {
+          type: "preset",
+          preset: "claude_code",
+          append: systemPrompt,
+        },
+        includePartialMessages: true,
+        ...(this.sessionId ? { resume: this.sessionId } : {}),
+      },
+    });
+
+    // Start the consumer loop
+    this.queryConsumerRunning = true;
+    this.consumeQuery().catch((err) => {
+      this.queryConsumerRunning = false;
+      if (this.currentEventSink) {
+        this.currentEventSink({
+          type: "error",
+          text: err instanceof Error ? err.message : String(err),
+        });
+        this.currentEventSink({ type: "done" });
+        this.currentDoneResolve?.();
+        this.currentDoneResolve = null;
+        this.currentEventSink = null;
+      }
+    });
+  }
+
+  /**
+   * Long-running loop that drains messages from the SDK query
+   * and routes them to the current event sink.
+   */
+  private async consumeQuery(): Promise<void> {
+    if (!this.activeQuery) return;
+
+    try {
+      for await (const msg of this.activeQuery) {
+        this.routeSDKMessage(msg);
+      }
+    } finally {
+      this.queryConsumerRunning = false;
+    }
+  }
+
+  /**
+   * Map an SDK message to ChatEvent(s) and forward to the current event sink.
+   */
+  private routeSDKMessage(msg: SDKMessage): void {
+    const sink = this.currentEventSink;
+
+    switch (msg.type) {
+      case "system": {
+        // Capture session ID from init message
+        if ("subtype" in msg && msg.subtype === "init" && msg.session_id) {
+          this.sessionId = msg.session_id;
+        }
+        break;
+      }
+
+      case "stream_event": {
+        // Partial streaming events — real-time text display
+        if (!sink) break;
+        const event = msg.event;
+        if (
+          event.type === "content_block_delta" &&
+          "delta" in event &&
+          event.delta.type === "text_delta" &&
+          "text" in event.delta
+        ) {
+          sink({ type: "text", text: event.delta.text });
+        }
+        break;
+      }
+
+      case "assistant": {
+        // Complete assistant message — extract tool_use blocks and log text
+        if (!msg.message?.content) break;
+        const content = msg.message.content;
+        if (!Array.isArray(content)) break;
+        for (const block of content) {
+          if (block.type === "text" && block.text) {
+            // Log full text to chat log (streaming already sent deltas to the sink)
+            this.chatLog({
+              role: "assistant",
+              type: "text",
+              text: block.text,
+            });
+          }
+          if (block.type === "tool_use") {
+            this.chatLog({
+              role: "assistant",
+              type: "tool_use",
+              name: block.name,
+              input: block.input,
+            });
+            sink?.({ type: "tool_use", name: block.name, input: block.input });
+          }
+        }
+        break;
+      }
+
+      case "user": {
+        // Tool results come through as user messages with tool_result content
+        if (!sink) break;
+        if (!msg.message?.content) break;
+        const userContent = Array.isArray(msg.message.content)
+          ? msg.message.content
+          : [msg.message.content];
+        for (const block of userContent) {
+          if (
+            typeof block === "object" &&
+            "type" in block &&
+            block.type === "tool_result"
+          ) {
+            const resultContent = "content" in block ? block.content : "";
+            let text = "";
+            if (typeof resultContent === "string") {
+              text = resultContent;
+            } else if (Array.isArray(resultContent)) {
+              text = resultContent
+                .filter(
+                  (c): c is { type: "text"; text: string } =>
+                    typeof c === "object" && c !== null && c.type === "text",
+                )
+                .map((c) => c.text)
+                .join("");
+            }
+            if (text) {
+              sink({ type: "tool_result", text });
+            }
+          }
+        }
+        break;
+      }
+
+      case "result": {
+        // Completion — log result and signal done
+        if (msg.subtype === "success" && "result" in msg && msg.result) {
+          this.chatLog({
+            role: "assistant",
+            type: "result",
+            text: msg.result,
+          });
+        }
+        if (msg.subtype !== "success" && "errors" in msg) {
+          for (const err of msg.errors) {
+            sink?.({ type: "error", text: err });
+          }
+        }
+        sink?.({ type: "done" });
+        this.currentDoneResolve?.();
+        this.currentDoneResolve = null;
+        this.currentEventSink = null;
+        break;
+      }
+    }
+  }
+
+  private destroyQuery(): void {
+    if (this.messageQueue) {
+      this.messageQueue.close();
+      this.messageQueue = null;
+    }
+    if (this.activeQuery) {
+      this.activeQuery.close();
+      this.activeQuery = null;
+    }
+    this.queryConsumerRunning = false;
+    this.currentEventSink = null;
+    this.currentDoneResolve = null;
+  }
+
+  /**
    * Send a message to Claude. Calls `onEvent` for each streamed event.
    * Returns a promise that resolves when Claude is done, and a kill
-   * function to abort the process.
+   * function to abort the current turn.
    */
   sendMessage(
     message: string,
@@ -146,140 +375,39 @@ export class ChatSession {
   ): { done: Promise<void>; kill: () => void } {
     this.chatLog({ role: "user", type: "message", text: message });
 
-    let systemPrompt = this.opts.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+    // Include recent errors in the message (system prompt is set at query creation)
+    let fullMessage = message;
     const recentErrors = this.opts.logBuffer.recentErrors();
     if (recentErrors.length > 0) {
-      systemPrompt += `\n\nRecent Vite dev server errors/warnings:\n${recentErrors.join("\n")}`;
+      fullMessage += `\n\n[Dev server context — recent errors/warnings:\n${recentErrors.join("\n")}\n]`;
     }
 
-    const args = [
-      this.opts.claudeBin,
-      "--print",
-      "--verbose",
-      "--output-format",
-      "stream-json",
-      "--dangerously-skip-permissions",
-      "--append-system-prompt",
-      systemPrompt,
-      "--model",
-      this.opts.model,
-    ];
+    // Ensure the query is running
+    this.ensureQuery();
 
-    if (this.sessionId) {
-      args.push("--resume", this.sessionId);
-    }
-
-    args.push(message);
-
-    const hasApiKey = !!this.opts.env["ANTHROPIC_API_KEY"];
-    const hasOAuthToken = !!this.opts.env["CLAUDE_ACCESS_TOKEN"];
-    const childEnv: Record<string, string> = {
-      ...(process.env as Record<string, string>),
-      CLAUDECODE: "",
-    };
-    if (hasApiKey) {
-      childEnv["ANTHROPIC_API_KEY"] = this.opts.env["ANTHROPIC_API_KEY"];
-    } else if (hasOAuthToken) {
-      childEnv["CLAUDE_CODE_OAUTH_TOKEN"] =
-        this.opts.env["CLAUDE_ACCESS_TOKEN"];
-    }
-
-    const child: ChildProcess = spawn("node", args, {
-      cwd: this.opts.projectRoot,
-      env: childEnv,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
-    const session = this;
-    let buffer = "";
-
+    // Wire up event routing for this request
     const done = new Promise<void>((resolve) => {
-      child.stdout?.on("data", (chunk: Buffer) => {
-        buffer += chunk.toString();
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (!line.trim()) continue;
-
-          try {
-            const msg = JSON.parse(line);
-
-            if (msg.type === "system" && msg.session_id) {
-              session.sessionId = msg.session_id;
-            }
-
-            if (msg.type === "assistant" && msg.message?.content) {
-              for (const block of msg.message.content) {
-                if (block.type === "text" && block.text) {
-                  session.chatLog({
-                    role: "assistant",
-                    type: "text",
-                    text: block.text,
-                  });
-                  onEvent({ type: "text", text: block.text });
-                }
-                if (block.type === "tool_use") {
-                  session.chatLog({
-                    role: "assistant",
-                    type: "tool_use",
-                    name: block.name,
-                    input: block.input,
-                  });
-                  onEvent({
-                    type: "tool_use",
-                    name: block.name,
-                    input: block.input,
-                  });
-                }
-              }
-            }
-
-            if (msg.type === "tool_result" && msg.content) {
-              for (const block of msg.content) {
-                if (block.type === "text" && block.text) {
-                  onEvent({ type: "tool_result", text: block.text });
-                }
-              }
-            }
-
-            if (msg.type === "result") {
-              if (msg.result) {
-                session.chatLog({
-                  role: "assistant",
-                  type: "result",
-                  text: msg.result,
-                });
-                onEvent({ type: "text", text: msg.result });
-              }
-              onEvent({ type: "done" });
-            }
-          } catch {
-            // skip unparseable lines
-          }
-        }
-      });
-
-      child.stderr?.on("data", (chunk: Buffer) => {
-        const text = chunk.toString().trim();
-        if (text) {
-          onEvent({ type: "error", text });
-        }
-      });
-
-      child.on("close", () => {
-        onEvent({ type: "done" });
-        resolve();
-      });
-
-      child.on("error", (err) => {
-        onEvent({ type: "error", text: err.message });
-        onEvent({ type: "done" });
-        resolve();
-      });
+      this.currentDoneResolve = resolve;
+      this.currentEventSink = onEvent;
     });
 
-    return { done, kill: () => child.kill() };
+    // Push the message into the async queue for the SDK
+    this.messageQueue!.push({
+      type: "user",
+      session_id: this.sessionId ?? "",
+      parent_tool_use_id: null,
+      message: {
+        role: "user",
+        content: fullMessage,
+      },
+    });
+
+    return {
+      done,
+      kill: () => {
+        this.activeQuery?.interrupt().catch(() => {});
+      },
+    };
   }
 }
 

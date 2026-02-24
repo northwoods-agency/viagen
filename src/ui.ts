@@ -76,6 +76,15 @@ export function buildUiHtml(opts?: {
     }
     .btn:hover { border-color: #52525b; color: #e4e4e7; }
     .btn.active { border-color: #22c55e; color: #22c55e; }
+    .icon-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 5px 7px;
+      min-width: 28px;
+      min-height: 28px;
+    }
+    .icon-btn.active { border-color: #52525b; color: #e4e4e7; }
     .activity-bar {
       padding: 6px 16px;
       border-bottom: 1px solid #27272a;
@@ -292,9 +301,11 @@ export function buildUiHtml(opts?: {
       background: transparent;
       border: none;
       border-bottom: 2px solid transparent;
+      border-right: 1px solid #27272a;
       cursor: pointer;
       transition: color 0.15s, border-color 0.15s;
     }
+    .tab:last-child { border-right: none; }
     .tab:hover { color: #a1a1aa; }
     .tab.active { color: #e4e4e7; border-bottom-color: #e4e4e7; }
     .file-dir-header {
@@ -509,22 +520,24 @@ export function buildUiHtml(opts?: {
       text-align: center;
       margin-top: 40%;
     }
-    @media (max-width: 768px) {
-      #popout-btn { display: none !important; }
-    }
   </style>
 </head>
 <body>
   <div class="header">
     <h1><span class="status-dot" id="status-dot"></span> viagen <span class="session-timer" id="session-timer"></span></h1>
-    <div style="display:flex;gap:4px;">
-      <button class="btn" id="popout-btn" title="Open split view" style="display:flex;align-items:center;padding:5px 7px;">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4"></path></svg>
+    <div style="display:flex;gap:4px;align-items:center;">
+      <button class="btn icon-btn" id="view-preview" title="Preview app">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
       </button>
-      <button class="btn" id="sound-btn" title="Toggle completion sound" style="display:flex;align-items:center;padding:5px 7px;">
+      <button class="btn icon-btn" id="view-split" title="Split view">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="12" y1="3" x2="12" y2="21"></line></svg>
+      </button>
+      <button class="btn icon-btn" id="view-chat" title="Chat only">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+      </button>
+      <button class="btn icon-btn" id="sound-btn" title="Toggle completion sound">
         <svg id="sound-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
       </button>
-      <button class="btn" id="publish-btn" style="display:none">Publish</button>
       <button class="btn" id="reset-btn">Reset</button>
     </div>
   </div>
@@ -532,8 +545,8 @@ export function buildUiHtml(opts?: {
     hasTabs
       ? `<div class="tab-bar" id="tab-bar">
     <button class="tab active" data-tab="chat">Chat</button>
+    ${hasGit ? '<button class="tab" data-tab="changes" id="changes-tab" style="position:relative;">Changes<span id="changes-dot" style="display:none;position:absolute;top:6px;right:6px;width:6px;height:6px;border-radius:50%;background:#facc15;"></span></button>' : ""}
     ${hasEditor ? '<button class="tab" data-tab="files">Files</button>' : ""}
-    ${hasGit ? '<button class="tab" data-tab="changes" id="changes-tab">Changes</button>' : ""}
     <button class="tab" data-tab="logs">Logs</button>
   </div>`
       : ""
@@ -570,7 +583,12 @@ export function buildUiHtml(opts?: {
   ${
     hasGit
       ? `<div id="changes-view" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
-    <div class="changes-summary" id="changes-summary" style="display:none;"></div>
+    <div class="changes-summary" id="changes-summary" style="display:none;">
+      <span id="changes-stats"></span>
+      <span style="flex:1;"></span>
+      <button class="btn" id="commit-btn" style="font-size:11px;padding:3px 8px;">Commit</button>
+      <button class="btn" id="revert-btn" style="font-size:11px;padding:3px 8px;color:#f87171;border-color:#7f1d1d;">Revert</button>
+    </div>
     <div id="changes-list-view" style="flex:1;overflow-y:auto;">
       <div id="changes-list" style="padding:0;"></div>
     </div>
@@ -597,7 +615,6 @@ export function buildUiHtml(opts?: {
     var inputEl = document.getElementById('input');
     var sendBtn = document.getElementById('send-btn');
     var resetBtn = document.getElementById('reset-btn');
-    var publishBtn = document.getElementById('publish-btn');
     var soundBtn = document.getElementById('sound-btn');
     var activityBar = document.getElementById('activity-bar');
     var currentTextSpan = null;
@@ -999,25 +1016,58 @@ export function buildUiHtml(opts?: {
       currentTextSpan = null;
       inputEl.focus();
     });
-    publishBtn.addEventListener('click', function () {
-      if (isStreaming) return;
-      // Switch to chat tab if on another tab
-      var chatTab = document.querySelector('.tab[data-tab="chat"]');
-      if (chatTab && !chatTab.classList.contains('active')) chatTab.click();
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-      if (publishBtn.dataset.branch && publishBtn.dataset.branch !== 'main' && publishBtn.dataset.branch !== 'master') {
-        inputEl.value = 'Commit all changes, push to the remote branch, and create a pull request using gh pr create. Share the PR URL.';
-      } else {
-        inputEl.value = 'Commit all changes, push to the remote repository, and run vercel deploy to get a preview URL';
-      }
-      send();
+    // ── View mode detection ──
+    var viewMode = 'overlay';
+    if (window.self === window.top) viewMode = 'standalone';
+
+    function highlightViewMode() {
+      document.getElementById('view-preview').classList.toggle('active', viewMode === 'overlay');
+      document.getElementById('view-split').classList.toggle('active', viewMode === 'iframe');
+      document.getElementById('view-chat').classList.toggle('active', viewMode === 'standalone');
+    }
+
+    document.getElementById('view-preview').addEventListener('click', function() {
+      if (viewMode === 'overlay') return;
+      var target = (window.self !== window.top) ? window.top : window;
+      target.location.href = '/';
+    });
+    document.getElementById('view-split').addEventListener('click', function() {
+      if (viewMode === 'iframe') return;
+      var target = (window.self !== window.top) ? window.top : window;
+      target.location.href = '/via/iframe';
+    });
+    document.getElementById('view-chat').addEventListener('click', function() {
+      if (viewMode === 'standalone') return;
+      var target = (window.self !== window.top) ? window.top : window;
+      target.location.href = '/via/ui';
     });
 
-    // Pop-out button — open split view in new tab
-    var popoutBtn = document.getElementById('popout-btn');
-    popoutBtn.addEventListener('click', function() {
-      window.open('/via/iframe', '_blank');
-    });
+    highlightViewMode();
+
+    // ── Commit + Revert buttons (inside Changes summary bar) ──
+    var commitBtn = document.getElementById('commit-btn');
+    var revertBtn = document.getElementById('revert-btn');
+
+    if (commitBtn) {
+      commitBtn.addEventListener('click', function() {
+        if (isStreaming) return;
+        var chatTab = document.querySelector('.tab[data-tab="chat"]');
+        if (chatTab && !chatTab.classList.contains('active')) chatTab.click();
+        inputEl.value = 'Commit all changes and push to the active branch.';
+        send();
+      });
+    }
+
+    if (revertBtn) {
+      revertBtn.addEventListener('click', function() {
+        if (isStreaming) return;
+        if (!confirm('Revert all changes? This cannot be undone.')) return;
+        var chatTab = document.querySelector('.tab[data-tab="chat"]');
+        if (chatTab && !chatTab.classList.contains('active')) chatTab.click();
+        inputEl.value = 'Run git checkout -- . && git clean -fd to revert all changes.';
+        send();
+      });
+    }
 
     // Accept messages from parent (e.g. "Fix This Error" button)
     window.addEventListener('message', function(ev) {
@@ -1025,9 +1075,10 @@ export function buildUiHtml(opts?: {
         inputEl.value = ev.data.message;
         send();
       }
-      // Hide pop-out button when already in iframe split view
+      // Detect iframe split-view mode
       if (ev.data && ev.data.type === 'viagen:context' && ev.data.iframe) {
-        popoutBtn.style.display = 'none';
+        viewMode = 'iframe';
+        highlightViewMode();
       }
     });
 
@@ -1059,10 +1110,6 @@ export function buildUiHtml(opts?: {
         var banner = document.getElementById('setup-banner');
         if (data.configured) {
           dot.className = 'status-dot ok';
-          if (data.git) {
-            publishBtn.style.display = '';
-            if (data.branch) publishBtn.dataset.branch = data.branch;
-          }
         } else {
           dot.className = 'status-dot error';
           inputEl.disabled = true;
@@ -1087,6 +1134,14 @@ export function buildUiHtml(opts?: {
         // Load chat history from server (source of truth)
         await loadHistory();
         startHistoryPolling();
+
+        // Check for changes on first load to show dot indicator
+        if (data.git) {
+          fetch('/via/git/status').then(function(r) { return r.json(); }).then(function(d) {
+            var dot = document.getElementById('changes-dot');
+            if (d.files && d.files.length > 0 && dot) dot.style.display = 'block';
+          }).catch(function() {});
+        }
 
         // Only auto-send prompt if no history exists (first boot)
         if (data.prompt && data.configured && chatLog.length === 0) {
@@ -1297,6 +1352,11 @@ export function buildUiHtml(opts?: {
       var changesTab = document.getElementById('changes-tab');
       var changesSummary = document.getElementById('changes-summary');
 
+      var changesDotEl = document.getElementById('changes-dot');
+      function updateChangesDot(hasChanges) {
+        if (changesDotEl) changesDotEl.style.display = hasChanges ? 'block' : 'none';
+      }
+
       window._viagenLoadChanges = loadChanges;
 
       async function loadChanges() {
@@ -1309,7 +1369,7 @@ export function buildUiHtml(opts?: {
           var data = await res.json();
           if (!data.git) {
             changesListEl.innerHTML = '<div class="changes-empty">Not a git repository</div>';
-            if (changesTab) changesTab.textContent = 'Changes';
+            updateChangesDot(false);
             return;
           }
           renderSummary(data);
@@ -1319,21 +1379,23 @@ export function buildUiHtml(opts?: {
         }
       }
 
+      var changesStatsEl = document.getElementById('changes-stats');
+
       function renderSummary(data) {
         var ins = data.insertions || 0;
         var del = data.deletions || 0;
         var count = data.files ? data.files.length : 0;
         if (count === 0) { changesSummary.style.display = 'none'; return; }
         changesSummary.style.display = 'flex';
-        changesSummary.innerHTML =
+        changesStatsEl.innerHTML =
           '<span class="stat-files">' + count + (count === 1 ? ' file' : ' files') + '</span>' +
-          (ins > 0 ? '<span class="stat-add">+' + ins + '</span>' : '') +
-          (del > 0 ? '<span class="stat-del">-' + del + '</span>' : '');
+          (ins > 0 ? ' <span class="stat-add">+' + ins + '</span>' : '') +
+          (del > 0 ? ' <span class="stat-del">-' + del + '</span>' : '');
       }
 
       function renderChanges(files) {
         changesListEl.innerHTML = '';
-        if (changesTab) changesTab.textContent = files.length > 0 ? 'Changes (' + files.length + ')' : 'Changes';
+        updateChangesDot(files.length > 0);
         if (files.length === 0) {
           changesListEl.innerHTML = '<div class="changes-empty">No changes</div>';
           return;

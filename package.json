@@ -39,6 +39,7 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.50",
     "@anthropic-ai/claude-code": "^2.1.42",
     "@vercel/sandbox": "^1",
     "lucide-react": "^0.564.0",
