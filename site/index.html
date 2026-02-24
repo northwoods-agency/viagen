@@ -70,7 +70,26 @@
                 font-weight: 700;
                 letter-spacing: -0.02em;
                 margin-bottom: 4px;
-                color: var(--text);
+                background: linear-gradient(
+                    90deg,
+                    #ff6b6b,
+                    #ff9f43,
+                    #ffd32a,
+                    #0be881,
+                    #00d2d3,
+                    #48dbfb,
+                    #ff9ff3,
+                    #ff6b6b
+                );
+                background-size: 200% auto;
+                -webkit-background-clip: text;
+                background-clip: text;
+                -webkit-text-fill-color: transparent;
+                animation: tropicalShift 4s linear infinite;
+            }
+            @keyframes tropicalShift {
+                0% { background-position: 0% center; }
+                100% { background-position: 200% center; }
             }
             .etymology {
                 font-family: ui-monospace, monospace;
