@@ -35,6 +35,10 @@ export interface ChatEvent {
   text?: string;
   name?: string;
   input?: unknown;
+  costUsd?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  durationMs?: number;
 }
 
 interface ChatSessionOpts {
@@ -341,7 +345,20 @@ export class ChatSession {
             sink?.({ type: "error", text: err });
           }
         }
-        sink?.({ type: "done" });
+        // Extract usage/cost from result
+        const doneEvent: ChatEvent = { type: "done" };
+        if ("total_cost_usd" in msg) {
+          doneEvent.costUsd = msg.total_cost_usd as number;
+        }
+        if ("duration_ms" in msg) {
+          doneEvent.durationMs = msg.duration_ms as number;
+        }
+        if ("usage" in msg && msg.usage) {
+          const u = msg.usage as Record<string, number>;
+          doneEvent.inputTokens = u.input_tokens ?? 0;
+          doneEvent.outputTokens = u.output_tokens ?? 0;
+        }
+        sink?.(doneEvent);
         this.currentDoneResolve?.();
         this.currentDoneResolve = null;
         this.currentEventSink = null;

@@ -532,7 +532,7 @@ export function buildUiHtml(opts?: {
       <input type="text" id="input" placeholder="What do you want to build?" autofocus />
       <button class="send-btn" id="send-btn">Send</button>
     </div>
-    ${hasGit ? '<div class="status-bar" id="status-bar" style="display:none;"><span id="status-branch"></span><span id="status-diff"></span></div>' : ""}
+    <div class="status-bar" id="status-bar">${hasGit ? '<span id="status-branch"></span><span id="status-diff"></span>' : ''}<span id="status-cost" style="display:none;margin-left:auto;"></span></div>
   </div>
   ${editor ? editor.html : ""}
   ${
@@ -649,14 +649,41 @@ export function buildUiHtml(opts?: {
       activityTimer = setInterval(updateActivityBar, 1000);
     }
 
-    function hideActivity() {
+    var sessionCostUsd = 0;
+    var sessionInputTokens = 0;
+    var sessionOutputTokens = 0;
+
+    function formatCost(usd) {
+      if (usd < 0.01) return '<$0.01';
+      return '$' + usd.toFixed(2);
+    }
+
+    function formatTokens(n) {
+      if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+      if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+      return String(n);
+    }
+
+    function hideActivity(usage) {
       if (activityTimer) { clearInterval(activityTimer); activityTimer = null; }
       var elapsed = formatDuration(Date.now() - sendStartTime);
       var parts = ['Done in ' + elapsed];
       if (toolCount > 0) parts.push(toolCount + (toolCount === 1 ? ' action' : ' actions'));
-      activityBar.textContent = parts.join(' · ');
+      if (usage && usage.costUsd != null) {
+        parts.push(formatCost(usage.costUsd));
+        sessionCostUsd += usage.costUsd;
+        sessionInputTokens += (usage.inputTokens || 0);
+        sessionOutputTokens += (usage.outputTokens || 0);
+      }
+      activityBar.textContent = parts.join(' \\u00b7 ');
       activityBar.classList.add('done');
       setTimeout(function() { activityBar.style.display = 'none'; }, 5000);
+      // Update status bar with session total
+      var costEl = document.getElementById('status-cost');
+      if (costEl && sessionCostUsd > 0) {
+        costEl.textContent = formatCost(sessionCostUsd) + ' (' + formatTokens(sessionInputTokens + sessionOutputTokens) + ' tokens)';
+        costEl.style.display = '';
+      }
     }
     window.addEventListener('beforeunload', function() { unloading = true; stopHistoryPolling(); });
     window.addEventListener('pagehide', function() { unloading = true; });
@@ -909,18 +936,7 @@ export function buildUiHtml(opts?: {
       else startHistoryPolling();
     }
 
-    async function send() {
-      var text = inputEl.value.trim();
-      if (!text || isStreaming) return;
-
-      addUserMessage(text);
-      inputEl.value = '';
-      setStreaming(true);
-      currentTextSpan = null;
-      sendStartTime = Date.now();
-      toolCount = 0;
-      showActivity();
-
+    async function sendRaw(text) {
       try {
         var res = await fetch('/via/chat', {
           method: 'POST',
@@ -931,6 +947,7 @@ export function buildUiHtml(opts?: {
         var reader = res.body.getReader();
         var decoder = new TextDecoder();
         var buffer = '';
+        var lastUsage = null;
 
         while (true) {
           var result = await reader.read();
@@ -948,6 +965,7 @@ export function buildUiHtml(opts?: {
               else if (data.type === 'tool_use') { toolCount++; updateActivityBar(); addToolBlock(data.name, data.input); }
               else if (data.type === 'tool_result') addToolResult(data.text);
               else if (data.type === 'error') addErrorBlock(data.text);
+              else if (data.type === 'done') lastUsage = data;
             } catch (e) {}
           }
         }
@@ -955,12 +973,26 @@ export function buildUiHtml(opts?: {
         if (!unloading) addErrorBlock('Connection failed');
       }
 
-      hideActivity();
+      hideActivity(lastUsage);
       playDoneSound();
-      // Advance timestamp so polling doesn't re-render messages from this stream
       historyTimestamp = Date.now();
       setStreaming(false);
       inputEl.focus();
+    }
+
+    async function send() {
+      var text = inputEl.value.trim();
+      if (!text || isStreaming) return;
+
+      addUserMessage(text);
+      inputEl.value = '';
+      setStreaming(true);
+      currentTextSpan = null;
+      sendStartTime = Date.now();
+      toolCount = 0;
+      showActivity();
+
+      await sendRaw(text);
     }
 
     sendBtn.addEventListener('click', send);
@@ -1113,7 +1145,6 @@ export function buildUiHtml(opts?: {
             var statusBar = document.getElementById('status-bar');
             var statusBranch = document.getElementById('status-branch');
             if (statusBar && statusBranch) {
-              statusBar.style.display = 'flex';
               statusBranch.textContent = '\\u2387 ' + d.branch;
               if (branchUrl) {
                 statusBranch.addEventListener('click', function() { window.open(branchUrl, '_blank'); });
@@ -1165,8 +1196,24 @@ export function buildUiHtml(opts?: {
 
         // Only auto-send prompt if no history exists (first boot)
         if (data.prompt && data.configured && chatLog.length === 0) {
-          inputEl.value = data.prompt;
-          send();
+          if (data.taskId) {
+            // Task mode: show link instead of raw prompt
+            var taskUrl = 'https://app.viagen.dev' + (data.projectId ? '/' + data.projectId : '') + '/' + data.taskId;
+            var div = document.createElement('div');
+            div.className = 'msg msg-user';
+            div.innerHTML = '<span class="label">Task</span><span class="text">Received instructions from <a href="' + escapeHtml(taskUrl) + '" target="_blank" style="color:#93c5fd;text-decoration:underline;">Viagen Task</a></span>';
+            messagesEl.appendChild(div);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+            // Send the prompt silently (don't show it as a user message)
+            showActivity();
+            setStreaming(true);
+            sendStartTime = Date.now();
+            toolCount = 0;
+            sendRaw(data.prompt);
+          } else {
+            inputEl.value = data.prompt;
+            send();
+          }
         }
       })
       .catch(function() {

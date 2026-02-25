@@ -606,7 +606,12 @@ function parseFlag(args: string[], flag: string): string | undefined {
   return undefined;
 }
 
-async function sandbox(args: string[]) {
+interface SandboxRunOptions {
+  extraEnvVars?: Record<string, string>;
+  promptOverride?: string;
+}
+
+async function sandbox(args: string[], options?: SandboxRunOptions) {
   const subcommand = args[0];
 
   if (subcommand === "stop") {
@@ -625,11 +630,14 @@ async function sandbox(args: string[]) {
   const branchOverride = parseFlag(args, "--branch") || parseFlag(args, "-b");
   const timeoutFlag = parseFlag(args, "--timeout") || parseFlag(args, "-t");
   const timeoutMinutes = timeoutFlag ? parseInt(timeoutFlag, 10) : undefined;
-  const prompt = parseFlag(args, "--prompt") || parseFlag(args, "-p");
+  const prompt = options?.promptOverride || parseFlag(args, "--prompt") || parseFlag(args, "-p");
 
   // Default: deploy sandbox
   const cwd = process.cwd();
   const dotenv = loadDotenv(cwd);
+  if (options?.extraEnvVars) {
+    Object.assign(dotenv, options.extraEnvVars);
+  }
   for (const [key, val] of Object.entries(dotenv)) {
     if (!process.env[key]) process.env[key] = val;
   }
@@ -1171,6 +1179,52 @@ async function requireClient(): Promise<ViagenClient> {
   return createViagen({ baseUrl: creds.baseUrl, token: creds.token, orgId: creds.orgId });
 }
 
+async function requireProjectId(client: ViagenClient): Promise<string> {
+  const cwd = process.cwd();
+  const env = loadDotenv(cwd);
+  let projectId: string | undefined = env["VIAGEN_PROJECT_ID"];
+
+  if (projectId) {
+    try {
+      await client.projects.get(projectId);
+      return projectId;
+    } catch {
+      console.log("Project from .env not found. Choose a project:");
+      console.log("");
+      projectId = undefined;
+    }
+  }
+
+  const projects = await client.projects.list();
+
+  if (projects.length === 0) {
+    console.error("No projects. Create one with `viagen projects create <name>` or `viagen sync`.");
+    process.exit(1);
+  }
+
+  if (projects.length === 1) {
+    return projects[0].id;
+  }
+
+  console.log("Select a project:");
+  console.log("");
+  for (let i = 0; i < projects.length; i++) {
+    const repo = projects[i].githubRepo ? ` (${projects[i].githubRepo})` : "";
+    console.log(`  ${i + 1}) ${projects[i].name}${repo}`);
+  }
+  console.log("");
+
+  const choice = await promptUser("Choose: ");
+  const idx = parseInt(choice, 10) - 1;
+
+  if (idx < 0 || idx >= projects.length) {
+    console.error("Invalid selection.");
+    process.exit(1);
+  }
+
+  return projects[idx].id;
+}
+
 // ─── teams command ──────────────────────────────────────────────
 
 async function teams() {
@@ -1316,6 +1370,191 @@ async function projects(args: string[]) {
   }
 }
 
+// ─── tasks command ───────────────────────────────────────────────
+
+function formatTaskStatus(status: string): string {
+  const icons: Record<string, string> = {
+    ready: "○",
+    running: "●",
+    completed: "✓",
+    failed: "✗",
+    validating: "◎",
+  };
+  return `${icons[status] || "?"} ${status}`;
+}
+
+async function tasksList(args: string[]) {
+  const client = await requireClient();
+  const projectId = await requireProjectId(client);
+  const status = parseFlag(args, "--status") || parseFlag(args, "-s");
+
+  const list = await client.tasks.list(projectId, status);
+
+  if (list.length === 0) {
+    console.log(
+      status
+        ? `No tasks with status "${status}".`
+        : "No tasks. Create one with `viagen tasks create <prompt>`.",
+    );
+    return;
+  }
+
+  console.log(
+    `${"ID".padEnd(10)} ${"STATUS".padEnd(14)} ${"BRANCH".padEnd(20)} ${"CREATED".padEnd(12)} PROMPT`,
+  );
+  console.log("-".repeat(80));
+
+  for (const t of list) {
+    const id = t.id.slice(0, 8);
+    const st = formatTaskStatus(t.status).padEnd(14);
+    const branch = (t.branch || "-").slice(0, 18).padEnd(20);
+    const created = t.createdAt.slice(0, 10).padEnd(12);
+    const prompt =
+      t.prompt.length > 40 ? t.prompt.slice(0, 37) + "..." : t.prompt;
+    console.log(`${id.padEnd(10)} ${st} ${branch} ${created} ${prompt}`);
+  }
+
+  console.log("");
+  console.log(`${list.length} task(s)`);
+}
+
+async function tasksCreate(args: string[]) {
+  const branch = parseFlag(args, "--branch") || parseFlag(args, "-b");
+
+  const positional: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--branch" || args[i] === "-b") {
+      i++;
+      continue;
+    }
+    positional.push(args[i]);
+  }
+
+  let prompt = positional.join(" ");
+
+  if (!prompt) {
+    prompt = await promptUser("Task prompt: ");
+    if (!prompt) {
+      console.log("Cancelled.");
+      return;
+    }
+  }
+
+  const client = await requireClient();
+  const projectId = await requireProjectId(client);
+
+  const input: { prompt: string; branch?: string } = { prompt };
+  if (branch) input.branch = branch;
+
+  const task = await client.tasks.create(projectId, input);
+
+  console.log(`Task created: ${task.id}`);
+  console.log(`  Prompt: ${task.prompt}`);
+  console.log(`  Branch: ${task.branch}`);
+  console.log(`  Status: ${task.status}`);
+  console.log("");
+  console.log(`Run with: viagen tasks run ${task.id}`);
+}
+
+async function tasksGet(args: string[]) {
+  const taskId = args[0];
+  if (!taskId) {
+    console.error("Usage: viagen tasks get <id>");
+    process.exit(1);
+  }
+
+  const client = await requireClient();
+  const projectId = await requireProjectId(client);
+  const task = await client.tasks.get(projectId, taskId);
+
+  console.log(`  ID:         ${task.id}`);
+  console.log(`  Status:     ${formatTaskStatus(task.status)}`);
+  console.log(`  Prompt:     ${task.prompt}`);
+  console.log(`  Branch:     ${task.branch}`);
+  console.log(`  Model:      ${task.model}`);
+  console.log(`  Created:    ${task.createdAt}`);
+  console.log(`  Created By: ${task.createdBy}`);
+  if (task.startedAt) console.log(`  Started:    ${task.startedAt}`);
+  if (task.completedAt) console.log(`  Completed:  ${task.completedAt}`);
+  if (task.durationMs) {
+    const secs = (task.durationMs / 1000).toFixed(1);
+    console.log(`  Duration:   ${secs}s`);
+  }
+  if (task.inputTokens || task.outputTokens) {
+    console.log(
+      `  Tokens:     ${(task.inputTokens || 0).toLocaleString()} in / ${(task.outputTokens || 0).toLocaleString()} out`,
+    );
+  }
+  if (task.prUrl) console.log(`  PR:         ${task.prUrl}`);
+  if (task.result) console.log(`  Result:     ${task.result}`);
+  if (task.error) console.log(`  Error:      ${task.error}`);
+}
+
+async function tasksRun(args: string[]) {
+  const taskId = args[0];
+  if (!taskId) {
+    console.error("Usage: viagen tasks run <id>");
+    process.exit(1);
+  }
+
+  const client = await requireClient();
+  const projectId = await requireProjectId(client);
+  const task = await client.tasks.get(projectId, taskId);
+
+  console.log(`Running task: ${task.id}`);
+  console.log(`  Prompt: ${task.prompt}`);
+  console.log(`  Branch: ${task.branch}`);
+  console.log("");
+
+  await client.tasks.update(projectId, taskId, { status: "running" });
+
+  const sandboxArgs: string[] = [];
+  if (task.branch) {
+    sandboxArgs.push("--branch", task.branch);
+  }
+
+  const timeout = parseFlag(args, "--timeout") || parseFlag(args, "-t");
+  if (timeout) {
+    sandboxArgs.push("--timeout", timeout);
+  }
+
+  try {
+    await sandbox(sandboxArgs, {
+      promptOverride: task.prompt,
+      extraEnvVars: {
+        VIAGEN_TASK_ID: task.id,
+        VIAGEN_PROJECT_ID: projectId,
+      },
+    });
+  } catch (err) {
+    console.error(`Sandbox deploy failed: ${err instanceof Error ? err.message : String(err)}`);
+    await client.tasks.update(projectId, taskId, { status: "ready" }).catch(() => {});
+    process.exit(1);
+  }
+}
+
+async function tasks(args: string[]) {
+  const sub = args[0];
+
+  if (sub === "create") {
+    await tasksCreate(args.slice(1));
+    return;
+  }
+
+  if (sub === "get") {
+    await tasksGet(args.slice(1));
+    return;
+  }
+
+  if (sub === "run") {
+    await tasksRun(args.slice(1));
+    return;
+  }
+
+  // Default: list tasks
+  await tasksList(args);
+}
+
 // ─── help ────────────────────────────────────────────────────────
 
 function help() {
@@ -1336,6 +1575,10 @@ function help() {
   console.log("  projects create <name>         Create a new project");
   console.log("  projects get <id>              Show project details");
   console.log("  projects delete <id>           Delete a project");
+  console.log("  tasks                          List tasks for current project");
+  console.log("  tasks create <prompt>          Create a new task");
+  console.log("  tasks get <id>                 Show task details");
+  console.log("  tasks run <id>                 Run a task in a sandbox");
   console.log("  dev                            Start Vite and open the split view");
   console.log("  setup                          Set up .env with API keys and tokens");
   console.log("  sandbox [-b branch] [-t min]   Deploy your project to a Vercel Sandbox");
@@ -1346,6 +1589,10 @@ function help() {
   console.log("Sandbox options:");
   console.log("  -b, --branch <name>   Branch to clone (default: current branch)");
   console.log("  -t, --timeout <min>   Sandbox timeout in minutes (default: 30)");
+  console.log("");
+  console.log("Task options:");
+  console.log("  -s, --status <status>   Filter tasks by status (list)");
+  console.log("  -b, --branch <name>     Branch for the task (create)");
   console.log("");
   console.log("Getting started:");
   console.log("  1. npm install viagen");
@@ -1412,6 +1659,8 @@ async function main() {
     await orgs(args.slice(1));
   } else if (command === "projects") {
     await projects(args.slice(1));
+  } else if (command === "tasks") {
+    await tasks(args.slice(1));
   } else if (command === "dev") {
     dev();
     return;

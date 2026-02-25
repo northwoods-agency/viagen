@@ -56,14 +56,16 @@ export function registerHealthRoutes(
         : null;
 
     const prompt = env["VIAGEN_PROMPT"] || null;
+    const taskId = env["VIAGEN_TASK_ID"] || null;
+    const projectId = env["VIAGEN_PROJECT_ID"] || null;
 
     res.setHeader("Content-Type", "application/json");
 
     if (configured) {
-      res.end(JSON.stringify({ status: "ok", configured: true, git, vercel, branch, session, prompt, missing }));
+      res.end(JSON.stringify({ status: "ok", configured: true, git, vercel, branch, session, prompt, taskId, projectId, missing }));
     } else {
       res.end(
-        JSON.stringify({ status: "error", configured: false, git, vercel, branch, session, prompt, missing }),
+        JSON.stringify({ status: "error", configured: false, git, vercel, branch, session, prompt, taskId, projectId, missing }),
       );
     }
   });
