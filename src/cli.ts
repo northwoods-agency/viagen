@@ -814,11 +814,17 @@ async function sandbox(args: string[], options?: SandboxRunOptions) {
   }
 
   console.log("");
-  console.log("Creating sandbox...");
   if (deployGit) {
     console.log(`  Repo:   ${deployGit.remoteUrl}`);
     console.log(`  Branch: ${deployGit.branch}`);
   }
+
+  // Spinner while sandbox deploys
+  const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+  let frameIdx = 0;
+  const spinner = setInterval(() => {
+    process.stdout.write(`\r  ${frames[frameIdx++ % frames.length]} Creating sandbox...`);
+  }, 80);
 
   const result = await deploySandbox({
     cwd,
@@ -845,13 +851,14 @@ async function sandbox(args: string[], options?: SandboxRunOptions) {
     prompt,
   });
 
+  clearInterval(spinner);
+  process.stdout.write("\r  ✓ Sandbox ready!            \n");
+
   const baseUrl = result.url.replace(/\/t\/.*$/, "");
   const iframeUrl = `${baseUrl}/via/iframe/t/${result.token}`;
   const chatUrl = `${baseUrl}/via/ui/t/${result.token}`;
   const popUrl = `${baseUrl}/via/pop/t/${result.token}`;
 
-  console.log("");
-  console.log("Sandbox deployed!");
   console.log("");
   console.log(`  App:        ${result.url}`);
   console.log(`  App + Chat: ${popUrl}`);
@@ -863,10 +870,38 @@ async function sandbox(args: string[], options?: SandboxRunOptions) {
     `  Mode:       ${result.mode === "git" ? "git clone (can push)" : "file upload (ephemeral)"}`,
   );
   console.log(`  Timeout:    ${timeoutMinutes ?? 30} minutes`);
-  console.log("");
-  console.log(`Stop with: npx viagen sandbox stop ${result.sandboxId}`);
 
   openBrowser(iframeUrl);
+
+  // Stream dev server logs and keep process alive
+  console.log("");
+  console.log("  Streaming sandbox logs (Ctrl+C to stop)...");
+  console.log("");
+
+  const ac = new AbortController();
+  const cleanup = async () => {
+    ac.abort();
+    console.log("");
+    console.log("Stopping sandbox...");
+    await result.stop().catch(() => {});
+    console.log("Sandbox stopped.");
+    process.exit(0);
+  };
+
+  process.on("SIGINT", () => { cleanup(); });
+  process.on("SIGTERM", () => { cleanup(); });
+
+  try {
+    for await (const log of result.streamLogs({ signal: ac.signal })) {
+      if (log.stream === "stderr") {
+        process.stderr.write(log.data);
+      } else {
+        process.stdout.write(log.data);
+      }
+    }
+  } catch {
+    // Stream ended (abort or sandbox stopped)
+  }
 }
 
 // ─── sync helpers ───────────────────────────────────────────────

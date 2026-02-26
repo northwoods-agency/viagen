@@ -31,7 +31,7 @@ export function createAuthMiddleware(token: string) {
       const cleanUrl = cleanPath + (url.search || "");
       res.setHeader(
         "Set-Cookie",
-        `viagen_session=${token}; HttpOnly; SameSite=Lax; Path=/; Secure`,
+        `viagen_session=${token}; HttpOnly; SameSite=Lax; Path=/`,
       );
       res.writeHead(302, { Location: cleanUrl });
       res.end();
@@ -44,7 +44,7 @@ export function createAuthMiddleware(token: string) {
       const cleanUrl = url.pathname + (url.search || "");
       res.setHeader(
         "Set-Cookie",
-        `viagen_session=${token}; HttpOnly; SameSite=Lax; Path=/; Secure`,
+        `viagen_session=${token}; HttpOnly; SameSite=Lax; Path=/`,
       );
       res.writeHead(302, { Location: cleanUrl });
       res.end();

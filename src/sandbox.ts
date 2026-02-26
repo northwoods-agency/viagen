@@ -56,6 +56,10 @@ interface DeploySandboxResult {
   sandboxId: string;
   /** Deployment mode used. */
   mode: "git" | "upload";
+  /** Stream dev server logs. Yields { data, stream } entries. Call close() to stop. */
+  streamLogs(opts?: { signal?: AbortSignal }): AsyncIterable<{ data: string; stream: string }>;
+  /** Stop the sandbox. */
+  stop(): Promise<void>;
 }
 
 const SKIP_DIRS = new Set([
@@ -101,9 +105,20 @@ function extractHost(httpsUrl: string): string {
   }
 }
 
+function startDots(label: string): { stop: () => void } {
+  process.stdout.write(label);
+  const timer = setInterval(() => process.stdout.write("."), 1000);
+  return {
+    stop() {
+      clearInterval(timer);
+      process.stdout.write("\n");
+    },
+  };
+}
+
 /**
  * Wait for the dev server to respond or capture early failure output.
- * Polls the base URL for up to 60 seconds while streaming logs.
+ * Polls the base URL for up to 60 seconds while capturing logs.
  */
 async function waitForServer(
   baseUrl: string,
@@ -114,17 +129,11 @@ async function waitForServer(
   const ac = new AbortController();
   let serverOutput = "";
 
-  // Stream dev server logs in the background
+  // Capture dev server logs silently for error reporting
   const logStream = (async () => {
     try {
       for await (const log of devServer.logs({ signal: ac.signal })) {
-        const line = log.data;
-        serverOutput += line;
-        if (log.stream === "stderr") {
-          process.stderr.write(`  ${line}`);
-        } else {
-          process.stdout.write(`  ${line}`);
-        }
+        serverOutput += log.data;
       }
     } catch {
       // Stream closed or aborted — expected
@@ -312,15 +321,13 @@ export async function deploySandbox(
       },
     ]);
 
-    // Install dependencies — stream output so errors are visible
-    console.log("  Installing dependencies...");
-    const install = await sandbox.runCommand({
-      cmd: "npm",
-      args: ["install"],
-      stdout: process.stdout,
-      stderr: process.stderr,
-    });
+    // Install dependencies — capture output for error reporting
+    const dots = startDots("  Installing dependencies");
+    const install = await sandbox.runCommand("npm", ["install"]);
+    dots.stop();
     if (install.exitCode !== 0) {
+      const stderr = await install.stderr();
+      console.error(stderr);
       throw new Error(`npm install failed (exit ${install.exitCode})`);
     }
 
@@ -331,13 +338,13 @@ export async function deploySandbox(
       detached: true,
     });
 
-    // Stream initial dev server output to catch startup errors
-    console.log("  Starting dev server...");
     const baseUrl = sandbox.domain(5173);
     const url = `${baseUrl}/t/${token}`;
 
     // Wait for the dev server to be ready or fail
+    const dots2 = startDots("  Starting dev server");
     const ready = await waitForServer(baseUrl, devServer);
+    dots2.stop();
     if (!ready.ok) {
       throw new Error(
         `Dev server failed to start: ${ready.error}`,
@@ -349,6 +356,8 @@ export async function deploySandbox(
       token,
       sandboxId: sandbox.sandboxId,
       mode: useGit ? "git" : "upload",
+      streamLogs: (opts) => devServer.logs(opts),
+      stop: () => sandbox.stop(),
     };
   } catch (err) {
     // Clean up on failure
