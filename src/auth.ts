@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { debug } from "./debug";
 
 type NextFn = (err?: unknown) => void;
 
@@ -29,6 +30,7 @@ export function createAuthMiddleware(token: string) {
     if (pathMatch && pathMatch[2] === token) {
       const cleanPath = pathMatch[1] || "/";
       const cleanUrl = cleanPath + (url.search || "");
+      debug("auth", `token URL match (/t/:token) → redirect to ${cleanUrl}`);
       res.setHeader(
         "Set-Cookie",
         `viagen_session=${token}; HttpOnly; SameSite=Lax; Path=/`,
@@ -42,6 +44,7 @@ export function createAuthMiddleware(token: string) {
     if (queryToken === token) {
       url.searchParams.delete("token");
       const cleanUrl = url.pathname + (url.search || "");
+      debug("auth", `query token match (?token=) → redirect to ${cleanUrl}`);
       res.setHeader(
         "Set-Cookie",
         `viagen_session=${token}; HttpOnly; SameSite=Lax; Path=/`,
@@ -55,19 +58,23 @@ export function createAuthMiddleware(token: string) {
     if (req.headers.cookie) {
       const cookies = parseCookies(req.headers.cookie);
       if (cookies["viagen_session"] === token) {
+        debug("auth", `cookie auth OK for ${url.pathname}`);
         next();
         return;
       }
+      debug("auth", `cookie present but no match for ${url.pathname}`);
     }
 
     // 3. Check Authorization header
     const auth = req.headers.authorization;
     if (auth && auth === `Bearer ${token}`) {
+      debug("auth", `bearer auth OK for ${url.pathname}`);
       next();
       return;
     }
 
     // 5. Unauthorized
+    debug("auth", `REJECTED 401 for ${url.pathname} (no cookie, no bearer, no token URL)`);
     res.statusCode = 401;
     res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify({ error: "Unauthorized" }));

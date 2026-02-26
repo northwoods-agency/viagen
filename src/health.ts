@@ -1,6 +1,7 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import type { ViteDevServer } from "vite";
+import { debug } from "./debug";
+
+declare const __VIAGEN_VERSION__: string | undefined;
 
 export interface ViteError {
   message: string;
@@ -21,6 +22,7 @@ export function registerHealthRoutes(
   });
 
   server.middlewares.use("/via/health", (_req, res) => {
+    debug("health", "health check requested");
     const configured =
       !!env["ANTHROPIC_API_KEY"] || !!env["CLAUDE_ACCESS_TOKEN"];
     const git = !!env["GITHUB_TOKEN"];
@@ -35,9 +37,6 @@ export function registerHealthRoutes(
     if (!env["ANTHROPIC_API_KEY"] && !env["CLAUDE_ACCESS_TOKEN"])
       missing.push("ANTHROPIC_API_KEY");
     if (!env["GITHUB_TOKEN"]) missing.push("GITHUB_TOKEN");
-    if (!env["VERCEL_TOKEN"]) missing.push("VERCEL_TOKEN");
-    if (!env["VERCEL_ORG_ID"]) missing.push("VERCEL_ORG_ID");
-    if (!env["VERCEL_PROJECT_ID"]) missing.push("VERCEL_PROJECT_ID");
 
     // Session timing (sandbox only)
     const sessionStart = env["VIAGEN_SESSION_START"]
@@ -71,37 +70,15 @@ export function registerHealthRoutes(
   });
 
   // GET /via/version — current version + check for updates
-  let currentVersion: string | null = null;
+  const currentVersion =
+    typeof __VIAGEN_VERSION__ !== "undefined" ? __VIAGEN_VERSION__ : "0.0.0";
+  debug("health", `version resolved: ${currentVersion}`);
   let versionCache: { latest: string; ts: number } | null = null;
-
-  function getCurrentVersion(): string {
-    if (currentVersion) return currentVersion;
-    try {
-      const pkg = JSON.parse(
-        readFileSync(join(__dirname, "..", "package.json"), "utf-8"),
-      );
-      currentVersion = pkg.version;
-    } catch {
-      try {
-        // Fallback: bundled — try require.resolve
-        const pkg = JSON.parse(
-          readFileSync(
-            join(__dirname, "package.json"),
-            "utf-8",
-          ),
-        );
-        currentVersion = pkg.version;
-      } catch {
-        currentVersion = "0.0.0";
-      }
-    }
-    return currentVersion!;
-  }
 
   server.middlewares.use("/via/version", (_req, res) => {
     res.setHeader("Content-Type", "application/json");
 
-    const current = getCurrentVersion();
+    const current = currentVersion;
 
     // Return cached if fresh (5 min)
     if (versionCache && Date.now() - versionCache.ts < 300_000) {

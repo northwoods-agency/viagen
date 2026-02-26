@@ -13,6 +13,7 @@ import { registerFileRoutes } from "./files";
 import { createInjectionMiddleware } from "./inject";
 import { registerGitRoutes } from "./git";
 import { registerLogRoutes } from "./logs";
+import { setDebug, debug } from "./debug";
 
 export interface ViagenOptions {
   /** Toggle button placement. Default: 'bottom-right' */
@@ -39,6 +40,8 @@ export interface ViagenOptions {
    * @example ['src/components', '.env', 'vite.config.ts']
    */
   editable?: string[];
+  /** Enable verbose debug logging. Also enabled by VIAGEN_DEBUG=1 in .env. */
+  debug?: boolean;
 }
 
 export { DEFAULT_SYSTEM_PROMPT } from "./chat";
@@ -72,6 +75,24 @@ export function viagen(options?: ViagenOptions): Plugin {
     configResolved(config) {
       env = loadEnv(config.mode, config.envDir ?? config.root, "");
       projectRoot = config.root;
+
+      // Enable debug logging from option or env var
+      const debugEnabled = options?.debug ?? env["VIAGEN_DEBUG"] === "1";
+      setDebug(debugEnabled);
+
+      debug("init", "plugin initializing");
+      debug("init", `projectRoot: ${projectRoot}`);
+      debug("init", `mode: ${config.mode}`);
+      debug("init", `ANTHROPIC_API_KEY: ${env["ANTHROPIC_API_KEY"] ? "set (" + env["ANTHROPIC_API_KEY"].slice(0, 8) + "...)" : "NOT SET"}`);
+      debug("init", `CLAUDE_ACCESS_TOKEN: ${env["CLAUDE_ACCESS_TOKEN"] ? "set" : "NOT SET"}`);
+      debug("init", `GITHUB_TOKEN: ${env["GITHUB_TOKEN"] ? "set" : "NOT SET"}`);
+      debug("init", `VIAGEN_AUTH_TOKEN: ${env["VIAGEN_AUTH_TOKEN"] ? "set" : "NOT SET"}`);
+      debug("init", `VIAGEN_MODEL: ${env["VIAGEN_MODEL"] || "(not set)"}`);
+      debug("init", `VIAGEN_PROMPT: ${env["VIAGEN_PROMPT"] ? `"${env["VIAGEN_PROMPT"].slice(0, 80)}..."` : "(not set)"}`);
+      debug("init", `VIAGEN_TASK_ID: ${env["VIAGEN_TASK_ID"] || "(not set)"}`);
+      debug("init", `model: ${env["VIAGEN_MODEL"] || opts.model}`);
+      debug("init", `ui: ${opts.ui}, overlay: ${opts.overlay}, position: ${opts.position}`);
+
       logBuffer.init(projectRoot);
       wrapLogger(config.logger, logBuffer);
 
@@ -107,6 +128,8 @@ export function viagen(options?: ViagenOptions): Plugin {
       ];
     },
     configureServer(server) {
+      debug("server", "configureServer starting");
+
       // Intercept HMR error payloads to capture structured build errors
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const hmrSender: any = (server as any).hot ?? server.ws;
@@ -148,7 +171,10 @@ export function viagen(options?: ViagenOptions): Plugin {
       // Auth middleware — only when VIAGEN_AUTH_TOKEN is set
       const authToken = env["VIAGEN_AUTH_TOKEN"];
       if (authToken) {
+        debug("server", "auth middleware enabled (VIAGEN_AUTH_TOKEN set)");
         server.middlewares.use(createAuthMiddleware(authToken));
+      } else {
+        debug("server", "auth middleware DISABLED (no VIAGEN_AUTH_TOKEN)");
       }
 
       const hasEditor = !!(options?.editable && options.editable.length > 0);
@@ -187,15 +213,18 @@ export function viagen(options?: ViagenOptions): Plugin {
       });
 
       // Chat session singleton — shared between routes and auto-prompt
+      const resolvedModel = env["VIAGEN_MODEL"] || opts.model;
+      debug("server", `creating ChatSession (model: ${resolvedModel})`);
       const chatSession = new ChatSession({
         env,
         projectRoot,
         logBuffer,
-        model: env["VIAGEN_MODEL"] || opts.model,
+        model: resolvedModel,
         systemPrompt: options?.systemPrompt,
       });
 
       // Chat routes
+      debug("server", "registering chat routes");
       registerChatRoutes(server, chatSession, { env });
 
       // File editor routes
@@ -216,9 +245,11 @@ export function viagen(options?: ViagenOptions): Plugin {
       const initialPrompt = env["VIAGEN_PROMPT"];
       if (initialPrompt && !promptSent) {
         promptSent = true;
+        debug("server", `auto-sending VIAGEN_PROMPT: "${initialPrompt.slice(0, 100)}"`);
         logBuffer.push("info", `[viagen] Auto-sending prompt: "${initialPrompt}"`);
         chatSession.sendMessage(initialPrompt, (event) => {
           if (event.type === "done") {
+            debug("server", "auto-prompt completed");
             logBuffer.push("info", `[viagen] Prompt completed`);
           }
         });

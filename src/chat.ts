@@ -11,6 +11,7 @@ import {
 import type { LogBuffer } from "./logger";
 import { refreshAccessToken } from "./oauth";
 import { AsyncQueue } from "./async-queue";
+import { debug } from "./debug";
 
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -118,7 +119,9 @@ export class ChatSession {
     if (hasOAuthToken && this.opts.env["CLAUDE_TOKEN_EXPIRES"]) {
       const expires = parseInt(this.opts.env["CLAUDE_TOKEN_EXPIRES"], 10);
       const nowSec = Math.floor(Date.now() / 1000);
+      debug("chat", `refreshTokenIfNeeded: expires=${expires}, now=${nowSec}, delta=${expires - nowSec}s`);
       if (nowSec > expires - 300) {
+        debug("chat", "refreshTokenIfNeeded: token expiring soon, refreshing...");
         const tokens = await refreshAccessToken(
           this.opts.env["CLAUDE_REFRESH_TOKEN"],
         );
@@ -163,11 +166,15 @@ export class ChatSession {
       this.queryConsumerRunning &&
       this.lastUsedToken === currentToken
     ) {
+      debug("chat", "ensureQuery: reusing existing query");
       return;
     }
 
     // Token changed or query not running — (re)create
-    if (this.activeQuery) this.destroyQuery();
+    if (this.activeQuery) {
+      debug("chat", "ensureQuery: destroying previous query (token changed or query ended)");
+      this.destroyQuery();
+    }
 
     this.lastUsedToken = currentToken;
     this.messageQueue = new AsyncQueue<SDKUserMessage>();
@@ -180,15 +187,21 @@ export class ChatSession {
 
     const hasApiKey = !!this.opts.env["ANTHROPIC_API_KEY"];
     const hasOAuthToken = !!this.opts.env["CLAUDE_ACCESS_TOKEN"];
+    debug("chat", `ensureQuery: hasApiKey=${hasApiKey}, hasOAuthToken=${hasOAuthToken}`);
     if (hasApiKey) {
       sdkEnv["ANTHROPIC_API_KEY"] = this.opts.env["ANTHROPIC_API_KEY"];
+      debug("chat", `ensureQuery: using ANTHROPIC_API_KEY (${this.opts.env["ANTHROPIC_API_KEY"].slice(0, 12)}...)`);
     } else if (hasOAuthToken) {
       sdkEnv["CLAUDE_CODE_OAUTH_TOKEN"] =
         this.opts.env["CLAUDE_ACCESS_TOKEN"];
+      debug("chat", "ensureQuery: using CLAUDE_CODE_OAUTH_TOKEN (OAuth)");
+    } else {
+      debug("chat", "ensureQuery: WARNING — no API key or OAuth token available!");
     }
 
     const systemPrompt = this.opts.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
 
+    debug("chat", `ensureQuery: creating SDK query (model: ${this.opts.model}, cwd: ${this.opts.projectRoot}, resume: ${this.sessionId ?? "none"})`);
     this.activeQuery = query({
       prompt: this.messageQueue,
       options: {
@@ -206,15 +219,18 @@ export class ChatSession {
         ...(this.sessionId ? { resume: this.sessionId } : {}),
       },
     });
+    debug("chat", "ensureQuery: SDK query created, starting consumer loop");
 
     // Start the consumer loop
     this.queryConsumerRunning = true;
     this.consumeQuery().catch((err) => {
       this.queryConsumerRunning = false;
+      const msg = err instanceof Error ? err.message : String(err);
+      debug("chat", `consumeQuery CRASHED: ${msg}`);
       if (this.currentEventSink) {
         this.currentEventSink({
           type: "error",
-          text: err instanceof Error ? err.message : String(err),
+          text: msg,
         });
         this.currentEventSink({ type: "done" });
         this.currentDoneResolve?.();
@@ -230,12 +246,14 @@ export class ChatSession {
    */
   private async consumeQuery(): Promise<void> {
     if (!this.activeQuery) return;
+    debug("chat", "consumeQuery: starting SDK message loop");
 
     try {
       for await (const msg of this.activeQuery) {
         this.routeSDKMessage(msg);
       }
     } finally {
+      debug("chat", "consumeQuery: loop ended");
       this.queryConsumerRunning = false;
     }
   }
@@ -245,12 +263,14 @@ export class ChatSession {
    */
   private routeSDKMessage(msg: SDKMessage): void {
     const sink = this.currentEventSink;
+    debug("chat", `SDK message: type=${msg.type}${("subtype" in msg) ? ` subtype=${msg.subtype}` : ""}`);
 
     switch (msg.type) {
       case "system": {
         // Capture session ID from init message
         if ("subtype" in msg && msg.subtype === "init" && msg.session_id) {
           this.sessionId = msg.session_id;
+          debug("chat", `session ID acquired: ${msg.session_id}`);
         }
         break;
       }
@@ -333,6 +353,7 @@ export class ChatSession {
 
       case "result": {
         // Completion — log result and signal done
+        debug("chat", `result: subtype=${msg.subtype}`);
         if (msg.subtype === "success" && "result" in msg && msg.result) {
           this.chatLog({
             role: "assistant",
@@ -342,6 +363,7 @@ export class ChatSession {
         }
         if (msg.subtype !== "success" && "errors" in msg) {
           for (const err of msg.errors) {
+            debug("chat", `result error: ${err}`);
             sink?.({ type: "error", text: err });
           }
         }
@@ -390,12 +412,14 @@ export class ChatSession {
     message: string,
     onEvent: (event: ChatEvent) => void,
   ): { done: Promise<void>; kill: () => void } {
+    debug("chat", `sendMessage: "${message.slice(0, 100)}${message.length > 100 ? "..." : ""}"`);
     this.chatLog({ role: "user", type: "message", text: message });
 
     // Include recent errors in the message (system prompt is set at query creation)
     let fullMessage = message;
     const recentErrors = this.opts.logBuffer.recentErrors();
     if (recentErrors.length > 0) {
+      debug("chat", `sendMessage: appending ${recentErrors.length} recent errors`);
       fullMessage += `\n\n[Dev server context — recent errors/warnings:\n${recentErrors.join("\n")}\n]`;
     }
 
@@ -455,6 +479,7 @@ export function registerChatRoutes(
   });
 
   server.middlewares.use("/via/chat", async (req, res) => {
+    debug("chat", `POST /via/chat received (method: ${req.method})`);
     if (req.method !== "POST") {
       res.statusCode = 405;
       res.end(JSON.stringify({ error: "Method not allowed" }));
@@ -463,8 +488,10 @@ export function registerChatRoutes(
 
     const hasApiKey = !!opts.env["ANTHROPIC_API_KEY"];
     const hasOAuthToken = !!opts.env["CLAUDE_ACCESS_TOKEN"];
+    debug("chat", `auth check: hasApiKey=${hasApiKey}, hasOAuthToken=${hasOAuthToken}`);
 
     if (!hasApiKey && !hasOAuthToken) {
+      debug("chat", "REJECTED: no auth configured");
       res.statusCode = 500;
       res.end(
         JSON.stringify({
@@ -509,16 +536,21 @@ export function registerChatRoutes(
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
 
+    debug("chat", `dispatching message to session: "${message.slice(0, 80)}"`);
     let done = false;
     const { kill } = session.sendMessage(message, (event) => {
       if (done) return;
       if (event.type === "done") {
         done = true;
+        debug("chat", "SSE stream done, closing response");
         if (!res.writableEnded) {
           res.write("event: done\ndata: {}\n\n");
           res.end();
         }
         return;
+      }
+      if (event.type === "error") {
+        debug("chat", `SSE error event: ${event.text}`);
       }
       if (!res.writableEnded) {
         res.write(`data: ${JSON.stringify(event)}\n\n`);
