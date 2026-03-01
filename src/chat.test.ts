@@ -6,6 +6,7 @@ import { createTestServer } from "./test-server";
 import { registerChatRoutes, ChatSession } from "./chat";
 import { LogBuffer } from "./logger";
 import type { ViteDevServer } from "vite";
+import type { McpServerConfig, CanUseTool } from "@anthropic-ai/claude-agent-sdk";
 
 /**
  * Tests for chat endpoint validation paths.
@@ -146,5 +147,68 @@ describe("chat routes — history", () => {
     expect(data.entries[0]).toEqual(entries[0]);
     expect(data.entries[1]).toEqual(entries[1]);
     expect(data.entries[2]).toEqual(entries[2]);
+  });
+});
+
+describe("ChatSession — MCP options passthrough", () => {
+  it("accepts mcpServers option", () => {
+    const logBuffer = new LogBuffer();
+    const mcpServers: Record<string, McpServerConfig> = {
+      test: { type: "sdk", name: "test" } as McpServerConfig,
+    };
+    const session = new ChatSession({
+      env: {},
+      projectRoot: "/tmp/fake",
+      logBuffer,
+      model: "sonnet",
+      mcpServers,
+    });
+    expect(session).toBeDefined();
+  });
+
+  it("accepts disallowedTools option", () => {
+    const logBuffer = new LogBuffer();
+    const session = new ChatSession({
+      env: {},
+      projectRoot: "/tmp/fake",
+      logBuffer,
+      model: "sonnet",
+      disallowedTools: ["Edit", "NotebookEdit"],
+    });
+    expect(session).toBeDefined();
+  });
+
+  it("accepts canUseTool option", () => {
+    const logBuffer = new LogBuffer();
+    const canUseTool: CanUseTool = async () => ({
+      behavior: "allow" as const,
+    });
+    const session = new ChatSession({
+      env: {},
+      projectRoot: "/tmp/fake",
+      logBuffer,
+      model: "sonnet",
+      canUseTool,
+    });
+    expect(session).toBeDefined();
+  });
+
+  it("accepts all MCP options together", () => {
+    const logBuffer = new LogBuffer();
+    const canUseTool: CanUseTool = async () => ({
+      behavior: "allow" as const,
+    });
+    const session = new ChatSession({
+      env: {},
+      projectRoot: "/tmp/fake",
+      logBuffer,
+      model: "sonnet",
+      mcpServers: {
+        viagen: { type: "sdk", name: "viagen" } as McpServerConfig,
+      },
+      disallowedTools: ["Edit"],
+      canUseTool,
+    });
+    expect(session).toBeDefined();
   });
 });

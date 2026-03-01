@@ -582,6 +582,8 @@ export function buildUiHtml(opts?: {
     var unloading = false;
     var historyTimestamp = 0;
     var historyPoll = null;
+    var healthTaskId = null;
+    var healthProjectId = null;
     var sendStartTime = 0;
     var toolCount = 0;
     var activityTimer = null;
@@ -701,7 +703,16 @@ export function buildUiHtml(opts?: {
         if (entry.timestamp) historyTimestamp = Math.max(historyTimestamp, entry.timestamp);
         if (entry.role === 'user' && entry.type === 'message') {
           chatLog.push({ type: 'user', content: entry.text });
-          renderUserMessage(entry.text);
+          // First user message in task mode: show task link instead of raw prompt
+          if (chatLog.filter(function(e) { return e.type === 'user'; }).length === 1 && healthTaskId) {
+            var taskUrl = 'https://app.viagen.dev' + (healthProjectId ? '/' + healthProjectId : '') + '/' + healthTaskId;
+            var div = document.createElement('div');
+            div.className = 'msg msg-user';
+            div.innerHTML = '<span class="label">Task</span><span class="text">Received instructions from <a href="' + escapeHtml(taskUrl) + '" target="_blank" style="color:#93c5fd;text-decoration:underline;">Viagen Task</a></span>';
+            messagesEl.appendChild(div);
+          } else {
+            renderUserMessage(entry.text);
+          }
         } else if (entry.role === 'assistant' && entry.type === 'text') {
           chatLog.push({ type: 'text', content: entry.text });
           renderTextBlock(entry.text);
@@ -1128,6 +1139,10 @@ export function buildUiHtml(opts?: {
             '<div style="margin-top:8px;">Run <code>npx viagen setup</code> to configure, then restart.</div>';
         }
         if (data.session) startSessionTimer(data.session.expiresAt);
+
+        // Store task context for history rendering
+        healthTaskId = data.taskId || null;
+        healthProjectId = data.projectId || null;
 
         // Load chat history from server (source of truth)
         await loadHistory();

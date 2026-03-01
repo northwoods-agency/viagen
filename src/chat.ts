@@ -7,6 +7,8 @@ import {
   type Query,
   type SDKMessage,
   type SDKUserMessage,
+  type McpServerConfig,
+  type CanUseTool,
 } from "@anthropic-ai/claude-agent-sdk";
 import type { LogBuffer } from "./logger";
 import { refreshAccessToken } from "./oauth";
@@ -48,6 +50,9 @@ interface ChatSessionOpts {
   logBuffer: LogBuffer;
   model: string;
   systemPrompt?: string;
+  mcpServers?: Record<string, McpServerConfig>;
+  disallowedTools?: string[];
+  canUseTool?: CanUseTool;
 }
 
 /**
@@ -217,6 +222,9 @@ export class ChatSession {
         },
         includePartialMessages: true,
         ...(this.sessionId ? { resume: this.sessionId } : {}),
+        ...(this.opts.mcpServers ? { mcpServers: this.opts.mcpServers } : {}),
+        ...(this.opts.disallowedTools ? { disallowedTools: this.opts.disallowedTools } : {}),
+        ...(this.opts.canUseTool ? { canUseTool: this.opts.canUseTool } : {}),
       },
     });
     debug("chat", "ensureQuery: SDK query created, starting consumer loop");

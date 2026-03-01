@@ -1455,10 +1455,15 @@ async function tasksList(args: string[]) {
 
 async function tasksCreate(args: string[]) {
   const branch = parseFlag(args, "--branch") || parseFlag(args, "-b");
+  const type = parseFlag(args, "--type") || parseFlag(args, "-T");
 
   const positional: string[] = [];
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--branch" || args[i] === "-b") {
+      i++;
+      continue;
+    }
+    if (args[i] === "--type" || args[i] === "-T") {
       i++;
       continue;
     }
@@ -1478,13 +1483,15 @@ async function tasksCreate(args: string[]) {
   const client = await requireClient();
   const projectId = await requireProjectId(client);
 
-  const input: { prompt: string; branch?: string } = { prompt };
+  const input: { prompt: string; branch?: string; type?: string } = { prompt };
   if (branch) input.branch = branch;
+  if (type) input.type = type;
 
   const task = await client.tasks.create(projectId, input);
 
   console.log(`Task created: ${task.id}`);
   console.log(`  Prompt: ${task.prompt}`);
+  console.log(`  Type:   ${task.type}`);
   console.log(`  Branch: ${task.branch}`);
   console.log(`  Status: ${task.status}`);
   console.log("");
@@ -1503,6 +1510,7 @@ async function tasksGet(args: string[]) {
   const task = await client.tasks.get(projectId, taskId);
 
   console.log(`  ID:         ${task.id}`);
+  console.log(`  Type:       ${task.type}`);
   console.log(`  Status:     ${formatTaskStatus(task.status)}`);
   console.log(`  Prompt:     ${task.prompt}`);
   console.log(`  Branch:     ${task.branch}`);
@@ -1628,6 +1636,7 @@ function help() {
   console.log("Task options:");
   console.log("  -s, --status <status>   Filter tasks by status (list)");
   console.log("  -b, --branch <name>     Branch for the task (create)");
+  console.log("  -T, --type <type>       Task type: task or plan (create)");
   console.log("");
   console.log("Getting started:");
   console.log("  1. npm install viagen");

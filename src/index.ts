@@ -14,6 +14,13 @@ import { createInjectionMiddleware } from "./inject";
 import { registerGitRoutes } from "./git";
 import { registerLogRoutes } from "./logs";
 import { setDebug, debug } from "./debug";
+import {
+  createViagenTools,
+  PLAN_SYSTEM_PROMPT,
+  PLAN_MODE_DISALLOWED_TOOLS,
+  planModeCanUseTool,
+} from "./viagen-tools";
+import type { McpServerConfig } from "@anthropic-ai/claude-agent-sdk";
 
 export interface ViagenOptions {
   /** Toggle button placement. Default: 'bottom-right' */
@@ -215,12 +222,37 @@ export function viagen(options?: ViagenOptions): Plugin {
       // Chat session singleton — shared between routes and auto-prompt
       const resolvedModel = env["VIAGEN_MODEL"] || opts.model;
       debug("server", `creating ChatSession (model: ${resolvedModel})`);
+
+      // MCP tools — created when running inside a viagen sandbox with task context
+      let mcpServers: Record<string, McpServerConfig> | undefined;
+      if (env["VIAGEN_CALLBACK_URL"] && env["VIAGEN_AUTH_TOKEN"] && env["VIAGEN_TASK_ID"]) {
+        debug("server", "creating viagen MCP tools (sandbox mode)");
+        const viagenMcp = createViagenTools();
+        mcpServers = { [viagenMcp.name]: viagenMcp };
+      }
+
+      // Plan mode restrictions
+      const isPlanMode = env["VIAGEN_TASK_TYPE"] === "plan";
+      let systemPrompt = options?.systemPrompt;
+
+      if (isPlanMode) {
+        debug("server", "plan mode active — restricting tools");
+        systemPrompt = PLAN_SYSTEM_PROMPT;
+      }
+
       const chatSession = new ChatSession({
         env,
         projectRoot,
         logBuffer,
         model: resolvedModel,
-        systemPrompt: options?.systemPrompt,
+        systemPrompt,
+        mcpServers,
+        ...(isPlanMode
+          ? {
+              disallowedTools: PLAN_MODE_DISALLOWED_TOOLS,
+              canUseTool: planModeCanUseTool,
+            }
+          : {}),
       });
 
       // Chat routes
