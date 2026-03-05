@@ -14,100 +14,134 @@ export function buildUiHtml(opts?: {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>viagen</title>
-  ${hasEditor ? `<script data-manual src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"><\/script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  ${
+    hasEditor
+      ? `<script data-manual src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"><\/script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"><\/script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"><\/script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markdown.min.js"><\/script>` : ""}
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markdown.min.js"><\/script>`
+      : ""
+  }
   <style>
     ${editor ? editor.css : ""}
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: #09090b;
-      color: #e4e4e7;
+      font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #ffffff;
+      color: #171717;
       height: 100vh;
       display: flex;
       flex-direction: column;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
     .header {
-      padding: 10px 16px;
-      border-bottom: 1px solid #27272a;
+      padding: 12px 16px;
+      border-bottom: 1px solid #e5e5e5;
       display: flex;
       align-items: center;
       justify-content: space-between;
       flex-shrink: 0;
+      background: #ffffff;
     }
     .header h1 {
-      font-size: 13px;
+      font-size: 15px;
       font-weight: 600;
-      font-family: ui-monospace, monospace;
-      color: #a1a1aa;
-      letter-spacing: 0.05em;
+      font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: #171717;
+      letter-spacing: -0.01em;
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
     }
     .status-dot {
       display: inline-block;
       width: 7px;
       height: 7px;
       border-radius: 50%;
-      background: #3f3f46;
+      background: #d4d4d4;
     }
     .status-dot.ok { background: #22c55e; }
     .status-dot.error { background: #ef4444; }
     .setup-banner {
       padding: 12px 16px;
-      border-bottom: 1px solid #27272a;
-      background: #18181b;
+      border-bottom: 1px solid #e5e5e5;
+      background: #fafafa;
       font-size: 12px;
-      color: #a1a1aa;
+      color: #525252;
       line-height: 1.6;
       flex-shrink: 0;
       display: none;
     }
     .setup-banner code {
-      font-family: ui-monospace, monospace;
-      color: #d4d4d8;
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      color: #171717;
       font-size: 11px;
+      background: #f0f0f0;
+      padding: 1px 5px;
+      border-radius: 4px;
     }
-    .update-banner {
-      padding: 6px 12px;
-      border-bottom: 1px solid #27272a;
-      background: #18181b;
-      font-family: ui-monospace, monospace;
-      font-size: 11px;
-      color: #a1a1aa;
-      flex-shrink: 0;
-      display: none;
+    .msg-system {
+      font-size: 12px;
+      color: #525252;
+      background: #fafafa;
+      border: 1px solid #e5e5e5;
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
+      line-height: 1.5;
+    }
+    .msg-system .system-icon {
+      flex-shrink: 0;
+      color: #a3a3a3;
+    }
+    .msg-system .system-text {
+      flex: 1;
+    }
+    .msg-system .system-action {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: #171717;
+      color: #ffffff;
+      border: none;
       cursor: pointer;
       transition: background 0.15s;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
-    .update-banner:hover { background: #1e1e22; }
-    .update-banner .update-badge {
-      font-size: 9px;
-      font-weight: 700;
-      padding: 1px 5px;
-      border-radius: 3px;
-      background: #365314;
-      color: #86efac;
-      text-transform: uppercase;
+    .msg-system .system-action:hover { background: #404040; }
+    .msg-system .system-dismiss {
+      color: #a3a3a3;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      padding: 2px;
+      flex-shrink: 0;
+      transition: color 0.15s;
+      background: none;
+      border: none;
     }
+    .msg-system .system-dismiss:hover { color: #525252; }
     .btn {
       padding: 5px 10px;
-      border: 1px solid #3f3f46;
-      background: #18181b;
-      color: #a1a1aa;
-      border-radius: 5px;
+      border: 1px solid #e5e5e5;
+      background: #ffffff;
+      color: #525252;
+      border-radius: 6px;
       font-size: 11px;
       cursor: pointer;
       font-family: inherit;
-      transition: border-color 0.15s, color 0.15s;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
     }
-    .btn:hover { border-color: #52525b; color: #e4e4e7; }
-    .btn.active { border-color: #22c55e; color: #22c55e; }
+    .btn:hover { border-color: #d4d4d4; color: #171717; background: #fafafa; }
+    .btn.active { border-color: #171717; color: #171717; }
     .icon-btn {
       display: flex;
       align-items: center;
@@ -116,140 +150,141 @@ export function buildUiHtml(opts?: {
       min-width: 28px;
       min-height: 28px;
     }
-    .icon-btn.active { border-color: #52525b; color: #e4e4e7; }
+    .icon-btn.active { border-color: #171717; color: #171717; }
     .activity-bar {
       padding: 6px 16px;
-      border-bottom: 1px solid #27272a;
-      background: #18181b;
-      font-family: ui-monospace, monospace;
+      border-bottom: 1px solid #e5e5e5;
+      background: #fafafa;
+      font-family: 'Geist Mono', ui-monospace, monospace;
       font-size: 11px;
-      color: #71717a;
+      color: #a3a3a3;
       flex-shrink: 0;
       display: none;
       animation: pulse 2s ease-in-out infinite;
     }
     .activity-bar.done {
       animation: none;
-      color: #a1a1aa;
+      color: #525252;
     }
     @keyframes pulse {
       0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
+      50% { opacity: 0.4; }
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
     }
     .msg-summary {
-      font-family: ui-monospace, monospace;
+      font-family: 'Geist Mono', ui-monospace, monospace;
       font-size: 11px;
-      color: #a1a1aa;
+      color: #a3a3a3;
       padding: 4px 0;
     }
     .session-timer {
-      font-family: ui-monospace, monospace;
+      font-family: 'Geist Mono', ui-monospace, monospace;
       font-size: 11px;
-      color: #52525b;
+      color: #a3a3a3;
       margin-left: 8px;
+      font-weight: 400;
     }
-    .session-timer.warning { color: #f59e0b; }
+    .session-timer.warning { color: #d97706; }
     .session-timer.critical { color: #ef4444; }
     .messages {
       flex: 1;
       overflow-y: auto;
-      padding: 12px;
+      padding: 16px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 10px;
     }
-    .messages:empty::after {
-      content: 'Ask Claude to build features or change something...';
-      color: #3f3f46;
-      font-size: 13px;
-      text-align: center;
-      margin-top: 40%;
-    }
+
     .msg {
       font-size: 13px;
       line-height: 1.6;
       word-wrap: break-word;
     }
     .label {
-      font-weight: 600;
+      font-weight: 500;
       font-size: 11px;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.04em;
       display: block;
-      margin-bottom: 2px;
+      margin-bottom: 3px;
     }
-    .msg-user .label { color: #a1a1aa; }
-    .msg-user .text { color: #d4d4d8; }
-    .msg-assistant .label { color: #d4d4d8; }
+    .msg-user .label { color: #a3a3a3; }
+    .msg-user .text { color: #171717; }
+    .msg-assistant .label { color: #a3a3a3; }
     .msg-assistant .text {
-      color: #d4d4d8;
+      color: #404040;
     }
     .msg-assistant .text a {
-      color: #60a5fa;
+      color: #2563eb;
       text-decoration: underline;
       text-underline-offset: 2px;
-      text-decoration-color: #3b82f640;
+      text-decoration-color: #2563eb40;
     }
-    .msg-assistant .text a:hover { text-decoration-color: #60a5fa; }
-    .msg-assistant .text strong { color: #e4e4e7; }
+    .msg-assistant .text a:hover { text-decoration-color: #2563eb; }
+    .msg-assistant .text strong { color: #171717; font-weight: 600; }
     .msg-assistant .text em { font-style: italic; }
     .msg-assistant .text .md-code {
-      font-family: ui-monospace, monospace;
-      font-size: 11px;
-      background: #27272a;
-      padding: 1px 5px;
-      border-radius: 3px;
-      color: #d4d4d8;
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 11.5px;
+      background: #f5f5f5;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #171717;
+      border: 1px solid #e5e5e5;
     }
     .msg-assistant .text .md-pre {
-      background: #18181b;
-      border: 1px solid #27272a;
-      border-radius: 5px;
-      padding: 8px 10px;
-      margin: 6px 0;
+      background: #fafafa;
+      border: 1px solid #e5e5e5;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin: 8px 0;
       overflow-x: auto;
-      font-family: ui-monospace, monospace;
-      font-size: 11px;
-      line-height: 1.5;
-      color: #d4d4d8;
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 11.5px;
+      line-height: 1.6;
+      color: #404040;
     }
     .msg-assistant .text .md-li {
       display: block;
       padding-left: 14px;
       text-indent: -14px;
-      line-height: 1.5;
+      line-height: 1.6;
     }
     .msg-assistant .text .md-li:first-child,
     .msg-assistant .text br + .md-li { margin-top: 4px; }
     .msg-assistant .text .md-li:last-child { margin-bottom: 4px; }
     .msg-assistant .text .md-li::before {
       content: '\\2022\\00a0\\00a0';
-      color: #52525b;
+      color: #d4d4d4;
     }
     .msg-assistant .text .md-h {
       display: block;
-      color: #e4e4e7;
-      margin-top: 4px;
+      color: #171717;
+      margin-top: 6px;
+      font-weight: 600;
     }
     .msg-tool {
-      font-family: ui-monospace, monospace;
+      font-family: 'Geist Mono', ui-monospace, monospace;
       font-size: 11px;
-      color: #71717a;
-      background: #18181b;
-      border: 1px solid #27272a;
-      border-radius: 5px;
-      padding: 6px 10px;
+      color: #737373;
+      background: #fafafa;
+      border: 1px solid #e5e5e5;
+      border-radius: 8px;
+      padding: 7px 10px;
       white-space: pre-wrap;
       word-break: break-word;
     }
     .msg-tool-result {
-      font-family: ui-monospace, monospace;
+      font-family: 'Geist Mono', ui-monospace, monospace;
       font-size: 10px;
-      color: #52525b;
-      background: #111113;
-      border: 1px solid #1e1e22;
+      color: #a3a3a3;
+      background: #f5f5f5;
+      border: 1px solid #e5e5e5;
       border-top: none;
-      border-radius: 0 0 5px 5px;
+      border-radius: 0 0 8px 8px;
       padding: 0;
       max-height: 0;
       overflow: hidden;
@@ -259,133 +294,160 @@ export function buildUiHtml(opts?: {
     }
     .msg-tool-result.open {
       max-height: 200px;
-      padding: 6px 10px;
+      padding: 7px 10px;
       overflow-y: auto;
     }
     .msg-tool.expandable {
       cursor: pointer;
-      border-radius: 5px 5px 0 0;
+      border-radius: 8px 8px 0 0;
     }
     .msg-tool.expandable::after {
       content: ' +';
-      color: #3f3f46;
+      color: #d4d4d4;
     }
     .msg-tool.expandable.expanded::after {
-      content: ' -';
+      content: ' \\2212';
     }
     .msg-error {
       font-size: 12px;
-      color: #f87171;
-      background: #1c0a0a;
-      border: 1px solid #7f1d1d;
-      border-radius: 5px;
-      padding: 6px 10px;
+      color: #dc2626;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 7px 10px;
     }
     .input-area {
-      padding: 10px 12px;
-      border-top: 1px solid #27272a;
-      display: flex;
-      gap: 6px;
+      padding: 12px 16px;
       flex-shrink: 0;
+      background: #ffffff;
     }
-    .input-area input {
-      flex: 1;
-      padding: 8px 12px;
-      border: 1px solid #3f3f46;
-      background: #18181b;
-      color: #e4e4e7;
-      border-radius: 6px;
+    .input-wrap {
+      border: 1px solid #e5e5e5;
+      border-radius: 12px;
+      background: #ffffff;
+      display: flex;
+      flex-direction: column;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .input-wrap:focus-within { box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04); }
+    .input-wrap.disabled { opacity: 0.4; }
+    .input-area textarea {
+      width: 100%;
+      padding: 10px 12px 0 12px;
+      border: none;
+      background: transparent;
+      color: #171717;
       font-size: 13px;
       font-family: inherit;
       outline: none;
-      transition: border-color 0.15s;
+      resize: none;
+      height: 24px;
+      overflow: hidden;
+      line-height: 1.5;
     }
-    .input-area input:focus { border-color: #71717a; }
-    .input-area input::placeholder { color: #52525b; }
-    .input-area input:disabled { opacity: 0.5; }
+    .input-area textarea::placeholder { color: #a3a3a3; }
+    .input-bottom {
+      display: flex;
+      align-items: flex-end;
+      justify-content: flex-end;
+      padding: 6px 8px 8px 8px;
+    }
     .send-btn {
-      padding: 8px 16px;
-      background: #3f3f46;
-      color: #e4e4e7;
-      border: 1px solid #52525b;
-      border-radius: 6px;
+      padding: 6px 8px;
+      background: #f0f0f0;
+      color: #737373;
+      border: none;
+      border-radius: 8px;
       font-size: 13px;
-      font-weight: 600;
+      font-weight: 500;
       cursor: pointer;
       font-family: inherit;
-      transition: background 0.15s, border-color 0.15s;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    .send-btn:hover { background: #52525b; border-color: #71717a; }
-    .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .send-btn:hover { background: #e5e5e5; color: #525252; }
+    .send-btn.active { background: #171717; color: #ffffff; border-color: #171717; }
+    .send-btn.active:hover { background: #404040; border-color: #404040; }
+    .send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
     .status-bar {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 4px 12px;
-      font-family: ui-monospace, monospace;
+      padding: 5px 16px;
+      font-family: 'Geist Mono', ui-monospace, monospace;
       font-size: 11px;
-      color: #52525b;
-      border-top: 1px solid #1e1e22;
+      color: #a3a3a3;
+      border-top: 1px solid #f5f5f5;
       flex-shrink: 0;
+      background: #ffffff;
     }
     .status-bar span { cursor: pointer; transition: color 0.15s; }
-    .status-bar span:hover { color: #a1a1aa; }
-    .status-bar .d-add { color: #4ade80; }
-    .status-bar .d-del { color: #f87171; }
+    .status-bar span:hover { color: #525252; }
+    .status-bar .d-add { color: #16a34a; }
+    .status-bar .d-del { color: #dc2626; }
     .changes-branch {
-      padding: 8px 12px;
-      font-family: ui-monospace, monospace;
+      padding: 8px 16px;
+      font-family: 'Geist Mono', ui-monospace, monospace;
       font-size: 12px;
-      color: #a1a1aa;
-      border-bottom: 1px solid #1e1e22;
+      color: #525252;
+      border-bottom: 1px solid #f5f5f5;
       display: flex;
       align-items: center;
       gap: 8px;
       flex-shrink: 0;
+      background: #ffffff;
     }
     .changes-branch a {
-      color: #52525b;
+      color: #a3a3a3;
       text-decoration: none;
       font-size: 11px;
       transition: color 0.15s;
     }
-    .changes-branch a:hover { color: #a1a1aa; }
+    .changes-branch a:hover { color: #525252; }
     .tab-bar {
       display: flex;
-      border-bottom: 1px solid #27272a;
+      border-bottom: 1px solid #e5e5e5;
       flex-shrink: 0;
-      background: #18181b;
+      background: #ffffff;
+      gap: 0;
     }
     .tab {
-      flex: 1;
-      padding: 8px 16px;
+      flex: none;
+      padding: 9px 16px;
       font-size: 12px;
-      font-weight: 600;
-      font-family: ui-monospace, monospace;
-      color: #71717a;
+      font-weight: 500;
+      font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: #a3a3a3;
       background: transparent;
       border: none;
       border-bottom: 2px solid transparent;
-      border-right: 1px solid #27272a;
       cursor: pointer;
       transition: color 0.15s, border-color 0.15s;
+      letter-spacing: -0.01em;
+      display: flex;
+      align-items: center;
+      gap: 5px;
     }
-    .tab:last-child { border-right: none; }
-    .tab:hover { color: #a1a1aa; }
-    .tab.active { color: #e4e4e7; border-bottom-color: #e4e4e7; }
+    .tab svg { flex-shrink: 0; }
+    .tab:hover { color: #525252; }
+    .tab.active { color: #171717; border-bottom-color: #171717; }
     .changes-file {
       padding: 8px 16px;
-      font-family: ui-monospace, monospace;
+      font-family: 'Geist Mono', ui-monospace, monospace;
       font-size: 12px;
-      color: #a1a1aa;
+      color: #525252;
       cursor: pointer;
       display: flex;
       align-items: center;
       gap: 8px;
       transition: background 0.1s;
-      border-bottom: 1px solid #1e1e22;
+      border-bottom: 1px solid #f5f5f5;
     }
-    .changes-file:hover { background: #18181b; color: #e4e4e7; }
+    .changes-file:hover { background: #fafafa; color: #171717; }
     .changes-file .file-path { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .changes-dot {
       width: 6px;
@@ -393,102 +455,104 @@ export function buildUiHtml(opts?: {
       border-radius: 50%;
       flex-shrink: 0;
     }
-    .changes-dot.M { background: #facc15; }
-    .changes-dot.A { background: #4ade80; }
-    .changes-dot.q { background: #4ade80; }
-    .changes-dot.D { background: #f87171; }
-    .changes-dot.R { background: #60a5fa; }
+    .changes-dot.M { background: #d97706; }
+    .changes-dot.A { background: #16a34a; }
+    .changes-dot.q { background: #16a34a; }
+    .changes-dot.D { background: #dc2626; }
+    .changes-dot.R { background: #2563eb; }
     .changes-badge {
       font-size: 10px;
-      color: #52525b;
-      font-family: ui-monospace, monospace;
+      color: #a3a3a3;
+      font-family: 'Geist Mono', ui-monospace, monospace;
     }
     .changes-summary {
       padding: 8px 16px;
-      border-bottom: 1px solid #27272a;
-      background: #18181b;
-      font-family: ui-monospace, monospace;
+      border-bottom: 1px solid #e5e5e5;
+      background: #fafafa;
+      font-family: 'Geist Mono', ui-monospace, monospace;
       font-size: 11px;
-      color: #71717a;
+      color: #737373;
       display: flex;
       align-items: center;
       gap: 10px;
       flex-shrink: 0;
     }
-    .changes-summary .stat-add { color: #4ade80; }
-    .changes-summary .stat-del { color: #f87171; }
-    .changes-summary .stat-files { color: #a1a1aa; }
+    .changes-summary .stat-add { color: #16a34a; }
+    .changes-summary .stat-del { color: #dc2626; }
+    .changes-summary .stat-files { color: #525252; }
     .file-delta {
-      font-family: ui-monospace, monospace;
+      font-family: 'Geist Mono', ui-monospace, monospace;
       font-size: 10px;
       display: flex;
       gap: 4px;
       flex-shrink: 0;
     }
-    .file-delta .d-add { color: #4ade80; }
-    .file-delta .d-del { color: #f87171; }
+    .file-delta .d-add { color: #16a34a; }
+    .file-delta .d-del { color: #dc2626; }
     .diff-view {
       flex: 1;
       overflow-y: auto;
       padding: 0;
-      font-family: ui-monospace, monospace;
+      font-family: 'Geist Mono', ui-monospace, monospace;
       font-size: 11px;
       line-height: 1.6;
+      background: #ffffff;
     }
     .diff-line {
       padding: 0 12px;
       white-space: pre-wrap;
       word-break: break-all;
     }
-    .diff-add { color: #4ade80; background: rgba(74,222,128,0.08); }
-    .diff-del { color: #f87171; background: rgba(248,113,113,0.08); }
-    .diff-hunk { color: #a78bfa; background: rgba(167,139,250,0.06); padding-top: 6px; margin-top: 4px; }
-    .diff-meta { color: #52525b; }
-    .diff-ctx { color: #71717a; }
+    .diff-add { color: #16a34a; background: #f0fdf4; }
+    .diff-del { color: #dc2626; background: #fef2f2; }
+    .diff-hunk { color: #7c3aed; background: #f5f3ff; padding-top: 6px; margin-top: 4px; }
+    .diff-meta { color: #a3a3a3; }
+    .diff-ctx { color: #737373; }
     .changes-empty {
       padding: 16px;
-      color: #52525b;
+      color: #a3a3a3;
       font-size: 12px;
-      font-family: ui-monospace, monospace;
+      font-family: 'Geist Mono', ui-monospace, monospace;
       text-align: center;
       margin-top: 40%;
     }
     .logs-header {
       padding: 6px 12px;
-      border-bottom: 1px solid #27272a;
+      border-bottom: 1px solid #e5e5e5;
       display: flex;
       align-items: center;
       justify-content: space-between;
       flex-shrink: 0;
-      background: #18181b;
+      background: #fafafa;
     }
     .logs-header span {
-      font-family: ui-monospace, monospace;
+      font-family: 'Geist Mono', ui-monospace, monospace;
       font-size: 11px;
-      color: #52525b;
+      color: #a3a3a3;
     }
     .logs-list {
       flex: 1;
       overflow-y: auto;
       padding: 4px 0;
+      background: #ffffff;
     }
     .log-entry {
       padding: 1px 16px;
-      font-family: ui-monospace, monospace;
+      font-family: 'Geist Mono', ui-monospace, monospace;
       font-size: 11px;
       line-height: 1.5;
       white-space: pre-wrap;
       word-break: break-all;
-      color: #a1a1aa;
+      color: #525252;
     }
-    .log-entry.warn { color: #facc15; }
-    .log-entry.error { color: #f87171; }
-    .log-time { color: #52525b; margin-right: 8px; }
+    .log-entry.warn { color: #d97706; }
+    .log-entry.error { color: #dc2626; }
+    .log-time { color: #a3a3a3; margin-right: 8px; }
     .logs-empty {
       padding: 16px;
-      color: #52525b;
+      color: #a3a3a3;
       font-size: 12px;
-      font-family: ui-monospace, monospace;
+      font-family: 'Geist Mono', ui-monospace, monospace;
       text-align: center;
       margin-top: 40%;
     }
@@ -496,19 +560,20 @@ export function buildUiHtml(opts?: {
 </head>
 <body>
   <div class="header">
-    <h1><span class="status-dot" id="status-dot"></span> viagen <span class="session-timer" id="session-timer"></span></h1>
+    <div style="display:flex;align-items:center;gap:0;">
+      <h1><span class="status-dot" id="status-dot"></span> via <span class="session-timer" id="session-timer"></span></h1>
+      <div style="display:flex;gap:4px;align-items:center;">
+        <button class="btn icon-btn" id="view-preview" title="Preview app" style="display:none;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+        </button>
+        <button class="btn icon-btn" id="view-toggle" title="Toggle view">
+          <svg id="view-toggle-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></svg>
+        </button>
+      </div>
+    </div>
     <div style="display:flex;gap:4px;align-items:center;">
-      <button class="btn icon-btn" id="view-preview" title="Preview app">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-      </button>
-      <button class="btn icon-btn" id="view-split" title="Split view">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="12" y1="3" x2="12" y2="21"></line></svg>
-      </button>
-      <button class="btn icon-btn" id="view-chat" title="Chat only">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
-      </button>
       <button class="btn icon-btn" id="sound-btn" title="Toggle completion sound">
-        <svg id="sound-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
+        <svg id="sound-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></svg>
       </button>
       <button class="btn" id="reset-btn">Reset</button>
     </div>
@@ -516,23 +581,27 @@ export function buildUiHtml(opts?: {
   ${
     hasTabs
       ? `<div class="tab-bar" id="tab-bar">
-    <button class="tab active" data-tab="chat">Chat</button>
-    ${hasGit ? '<button class="tab" data-tab="changes" id="changes-tab" style="position:relative;">Changes<span id="changes-dot" style="display:none;position:absolute;top:6px;right:6px;width:6px;height:6px;border-radius:50%;background:#facc15;"></span></button>' : ""}
-    ${hasEditor ? '<button class="tab" data-tab="files">Files</button>' : ""}
-    <button class="tab" data-tab="logs">Logs</button>
+    <button class="tab active" data-tab="chat"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="10" x="3" y="11" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" x2="8" y1="16" y2="16"/><line x1="16" x2="16" y1="16" y2="16"/></svg>Chat</button>
+    ${hasGit ? '<button class="tab" data-tab="changes" id="changes-tab" style="position:relative;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M9 13h2"/><path d="M9 17h6"/></svg>Changes<span id="changes-dot" style="display:none;position:absolute;top:6px;right:6px;width:6px;height:6px;border-radius:50%;background:#d97706;"></span></button>' : ""}
+    ${hasEditor ? '<button class="tab" data-tab="files"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>Files</button>' : ""}
+    <button class="tab" data-tab="logs"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>Logs</button>
   </div>`
       : ""
   }
   <div id="chat-view" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
     <div class="setup-banner" id="setup-banner"></div>
-    <div class="update-banner" id="update-banner"><span class="update-badge">update</span><span id="update-text"></span></div>
+
     <div class="activity-bar" id="activity-bar"></div>
     <div class="messages" id="messages"></div>
     <div class="input-area">
-      <input type="text" id="input" placeholder="What do you want to build?" autofocus />
-      <button class="send-btn" id="send-btn">Send</button>
+      <div class="input-wrap" id="input-wrap">
+        <textarea id="input" rows="1" placeholder="What do you want to build?" autofocus></textarea>
+        <div class="input-bottom">
+          <button class="send-btn" id="send-btn"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg></button>
+        </div>
+      </div>
     </div>
-    <div class="status-bar" id="status-bar">${hasGit ? '<span id="status-branch"></span><span id="status-diff"></span>' : ''}<span id="status-cost" style="display:none;margin-left:auto;"></span></div>
+    <div class="status-bar" id="status-bar">${hasGit ? '<span id="status-branch"></span><span id="status-diff"></span>' : ""}<span id="status-cost" style="display:none;margin-left:auto;"></span></div>
   </div>
   ${editor ? editor.html : ""}
   ${
@@ -546,7 +615,7 @@ export function buildUiHtml(opts?: {
       <span id="changes-stats"></span>
       <span style="flex:1;"></span>
       <button class="btn" id="commit-btn" style="font-size:11px;padding:3px 8px;">Commit</button>
-      <button class="btn" id="revert-btn" style="font-size:11px;padding:3px 8px;color:#f87171;border-color:#7f1d1d;">Revert</button>
+      <button class="btn" id="revert-btn" style="font-size:11px;padding:3px 8px;color:#dc2626;border-color:#fecaca;">Revert</button>
     </div>
     <div id="changes-list-view" style="flex:1;overflow-y:auto;">
       <div id="changes-list" style="padding:0;"></div>
@@ -705,10 +774,10 @@ export function buildUiHtml(opts?: {
           chatLog.push({ type: 'user', content: entry.text });
           // First user message in task mode: show task link instead of raw prompt
           if (chatLog.filter(function(e) { return e.type === 'user'; }).length === 1 && healthTaskId) {
-            var taskUrl = 'https://app.viagen.dev' + (healthProjectId ? '/' + healthProjectId : '') + '/' + healthTaskId;
+            var taskUrl = 'https://app.viagen.dev' + (data.projectId ? '/' + data.projectId : '') + '/' + data.taskId;
             var div = document.createElement('div');
             div.className = 'msg msg-user';
-            div.innerHTML = '<span class="label">Task</span><span class="text">Received instructions from <a href="' + escapeHtml(taskUrl) + '" target="_blank" style="color:#93c5fd;text-decoration:underline;">Viagen Task</a></span>';
+            div.innerHTML = '<span class="label">Task</span><span class="text">Received instructions from <a href="' + escapeHtml(taskUrl) + '" target="_blank" style="color:#2563eb;text-decoration:underline;">Viagen Task</a></span>';
             messagesEl.appendChild(div);
           } else {
             renderUserMessage(entry.text);
@@ -849,7 +918,7 @@ export function buildUiHtml(opts?: {
     function renderUserMessage(text) {
       var div = document.createElement('div');
       div.className = 'msg msg-user';
-      div.innerHTML = '<span class="label">You</span><span class="text">' + escapeHtml(text) + '</span>';
+      div.innerHTML = '<span class="text">' + escapeHtml(text) + '</span>';
       messagesEl.appendChild(div);
     }
 
@@ -857,7 +926,7 @@ export function buildUiHtml(opts?: {
       currentTextSpan = null;
       var div = document.createElement('div');
       div.className = 'msg msg-assistant';
-      div.innerHTML = '<span class="label">Claude</span><span class="text stream-text"></span>';
+      div.innerHTML = '<span class="text stream-text"></span>';
       messagesEl.appendChild(div);
       div.querySelector('.stream-text').innerHTML = renderMarkdown(text);
     }
@@ -899,7 +968,7 @@ export function buildUiHtml(opts?: {
       if (!currentTextSpan) {
         var div = document.createElement('div');
         div.className = 'msg msg-assistant';
-        div.innerHTML = '<span class="label">Claude</span><span class="text stream-text"></span>';
+        div.innerHTML = '<span class="text stream-text"></span>';
         messagesEl.appendChild(div);
         currentTextSpan = div.querySelector('.stream-text');
       }
@@ -944,11 +1013,26 @@ export function buildUiHtml(opts?: {
       scrollToBottom();
     }
 
+    var maxInputHeight = Math.floor(13 * 1.5 * 8); // 8 lines
+    function autoResize() {
+      inputEl.style.height = 'auto';
+      var newHeight = Math.min(inputEl.scrollHeight, maxInputHeight);
+      inputEl.style.height = newHeight + 'px';
+      inputEl.style.overflow = inputEl.scrollHeight > maxInputHeight ? 'auto' : 'hidden';
+      scrollToBottom();
+    }
+    function updateSendActive() {
+      sendBtn.classList.toggle('active', inputEl.value.trim().length > 0 && !isStreaming);
+    }
+    inputEl.addEventListener('input', function() { autoResize(); updateSendActive(); });
+
     function setStreaming(v) {
       isStreaming = v;
       inputEl.disabled = v;
+      document.getElementById('input-wrap').classList.toggle('disabled', v);
       sendBtn.disabled = v;
-      sendBtn.textContent = v ? '...' : 'Send';
+      sendBtn.innerHTML = v ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>' : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>';
+      updateSendActive();
       if (v) stopHistoryPolling();
       else startHistoryPolling();
     }
@@ -1001,8 +1085,12 @@ export function buildUiHtml(opts?: {
       var text = inputEl.value.trim();
       if (!text || isStreaming) return;
 
+      var welcomeMsg = document.getElementById('welcome-msg');
+      if (welcomeMsg) welcomeMsg.remove();
       addUserMessage(text);
       inputEl.value = '';
+      inputEl.style.height = 'auto';
+      updateSendActive();
       setStreaming(true);
       currentTextSpan = null;
       sendStartTime = Date.now();
@@ -1029,10 +1117,19 @@ export function buildUiHtml(opts?: {
     var viewMode = 'overlay';
     if (window.self === window.top) viewMode = 'standalone';
 
-    function highlightViewMode() {
-      document.getElementById('view-preview').classList.toggle('active', viewMode === 'overlay');
-      document.getElementById('view-split').classList.toggle('active', viewMode === 'iframe');
-      document.getElementById('view-chat').classList.toggle('active', viewMode === 'standalone');
+    var expandIcon = '<polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="3" y1="21" x2="10" y2="14"></line>';
+    var contractIcon = '<polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line>';
+
+    function updateViewToggle() {
+      var icon = document.getElementById('view-toggle-icon');
+      var btn = document.getElementById('view-toggle');
+      if (viewMode === 'standalone') {
+        icon.innerHTML = expandIcon;
+        btn.title = 'Split view';
+      } else {
+        icon.innerHTML = contractIcon;
+        btn.title = 'Full screen';
+      }
     }
 
     document.getElementById('view-preview').addEventListener('click', function() {
@@ -1040,18 +1137,16 @@ export function buildUiHtml(opts?: {
       var target = (window.self !== window.top) ? window.top : window;
       target.location.href = '/';
     });
-    document.getElementById('view-split').addEventListener('click', function() {
-      if (viewMode === 'iframe') return;
+    document.getElementById('view-toggle').addEventListener('click', function() {
       var target = (window.self !== window.top) ? window.top : window;
-      target.location.href = '/via/iframe';
-    });
-    document.getElementById('view-chat').addEventListener('click', function() {
-      if (viewMode === 'standalone') return;
-      var target = (window.self !== window.top) ? window.top : window;
-      target.location.href = '/via/ui';
+      if (viewMode === 'standalone') {
+        target.location.href = '/via/iframe';
+      } else {
+        target.location.href = '/via/ui';
+      }
     });
 
-    highlightViewMode();
+    updateViewToggle();
 
     // ── Commit + Revert buttons (inside Changes summary bar) ──
     var commitBtn = document.getElementById('commit-btn');
@@ -1087,7 +1182,7 @@ export function buildUiHtml(opts?: {
       // Detect iframe split-view mode
       if (ev.data && ev.data.type === 'viagen:context' && ev.data.iframe) {
         viewMode = 'iframe';
-        highlightViewMode();
+        updateViewToggle();
       }
     });
 
@@ -1123,16 +1218,16 @@ export function buildUiHtml(opts?: {
           dot.className = 'status-dot error';
           inputEl.disabled = true;
           sendBtn.disabled = true;
-          inputEl.placeholder = 'Not configured — run npx viagen setup';
+          inputEl.placeholder = 'Not configured \\u2014 run npx viagen setup';
         }
         // Show checklist banner if anything is missing
         if (data.missing && data.missing.length > 0) {
           banner.style.display = 'block';
           var items = data.missing.map(function(v) {
             var isSet = data.missing.indexOf(v) === -1;
-            return '<div style="font-family:ui-monospace,monospace;font-size:11px;padding:1px 0;">' +
-              '<span style="color:' + (isSet ? '#22c55e' : '#ef4444') + ';margin-right:6px;">' + (isSet ? '&#10003;' : '&#10007;') + '</span>' +
-              '<span style="color:#a1a1aa;">' + escapeHtml(v) + '</span></div>';
+            return '<div style="font-family:Geist Mono,ui-monospace,monospace;font-size:11px;padding:1px 0;">' +
+              '<span style="color:' + (isSet ? '#16a34a' : '#dc2626') + ';margin-right:6px;">' + (isSet ? '&#10003;' : '&#10007;') + '</span>' +
+              '<span style="color:#525252;">' + escapeHtml(v) + '</span></div>';
           });
           banner.innerHTML = '<div style="margin-bottom:6px;">Missing environment variables:</div>' +
             items.join('') +
@@ -1148,6 +1243,15 @@ export function buildUiHtml(opts?: {
         await loadHistory();
         startHistoryPolling();
 
+        // Show welcome message if no chat history
+        if (chatLog.length === 0 && !data.prompt) {
+          var welcome = document.createElement('div');
+          welcome.className = 'msg msg-assistant';
+          welcome.id = 'welcome-msg';
+          welcome.innerHTML = '<span class="text">\uD83D\uDC4B Amigo! What are you waiting for? Lets get started.</span>';
+          messagesEl.appendChild(welcome);
+        }
+
         // Check for changes + branch info on first load
         if (data.git) {
           fetch('/via/git/status').then(function(r) { return r.json(); }).then(function(d) {
@@ -1156,7 +1260,7 @@ export function buildUiHtml(opts?: {
             // Update status bar diff summary
             var statusDiff = document.getElementById('status-diff');
             if (statusDiff && (d.insertions || d.deletions)) {
-              statusDiff.innerHTML = '<span class="d-add">+' + d.insertions + '</span> <span class="d-del">\\u2212' + d.deletions + '</span>';
+              statusDiff.innerHTML = '<span class="d-add">+' + d.insertions + '</span> <span class="d-del">-' + d.deletions + '</span>';
             }
           }).catch(function() {});
 
@@ -1199,20 +1303,24 @@ export function buildUiHtml(opts?: {
           }).catch(function() {});
         }
 
-        // Check for viagen updates
+        // Check for viagen updates — show as system message in chat
         fetch('/via/version').then(function(r) { return r.json(); }).then(function(v) {
           if (v.updateAvailable && v.latest) {
-            var updateBanner = document.getElementById('update-banner');
-            var updateText = document.getElementById('update-text');
-            if (updateBanner && updateText) {
-              updateText.textContent = 'viagen ' + v.latest + ' available (current: ' + v.current + ')';
-              updateBanner.style.display = 'flex';
-              updateBanner.addEventListener('click', function() {
-                updateBanner.style.display = 'none';
-                inputEl.value = 'Update viagen to v' + v.latest + ' (npm install viagen@' + v.latest + ') and restart the dev server.';
-                send();
-              });
-            }
+            var card = document.createElement('div');
+            card.className = 'msg msg-system';
+            card.innerHTML = '<svg class="system-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>' +
+              '<span class="system-text">viagen <strong>' + escapeHtml(v.latest) + '</strong> is available</span>' +
+              '<button class="system-action" id="update-btn">Update</button>' +
+              '<button class="system-dismiss" id="update-dismiss">&times;</button>';
+            messagesEl.insertBefore(card, messagesEl.firstChild);
+            document.getElementById('update-btn').addEventListener('click', function() {
+              card.remove();
+              inputEl.value = 'Update viagen to v' + v.latest + ' (npm install viagen@' + v.latest + ') and restart the dev server.';
+              send();
+            });
+            document.getElementById('update-dismiss').addEventListener('click', function() {
+              card.remove();
+            });
           }
         }).catch(function() {});
 
@@ -1223,7 +1331,7 @@ export function buildUiHtml(opts?: {
             var taskUrl = 'https://app.viagen.dev' + (data.projectId ? '/' + data.projectId : '') + '/' + data.taskId;
             var div = document.createElement('div');
             div.className = 'msg msg-user';
-            div.innerHTML = '<span class="label">Task</span><span class="text">Received instructions from <a href="' + escapeHtml(taskUrl) + '" target="_blank" style="color:#93c5fd;text-decoration:underline;">Viagen Task</a></span>';
+            div.innerHTML = '<span class="label">Task</span><span class="text">Received instructions from <a href="' + escapeHtml(taskUrl) + '" target="_blank" style="color:#2563eb;text-decoration:underline;">Viagen Task</a></span>';
             messagesEl.appendChild(div);
             scrollToBottom();
             // Send the prompt silently (don't show it as a user message)
@@ -1301,7 +1409,7 @@ export function buildUiHtml(opts?: {
         changesListView.style.display = 'block';
         changesDiffView.style.display = 'none';
         changesSummary.style.display = 'none';
-        changesListEl.innerHTML = '<div style="padding:16px;color:#52525b;font-size:12px;font-family:ui-monospace,monospace;">Loading...</div>';
+        changesListEl.innerHTML = '<div style="padding:16px;color:#a3a3a3;font-size:12px;font-family:Geist Mono,ui-monospace,monospace;">Loading...</div>';
         try {
           var res = await fetch('/via/git/status');
           var data = await res.json();
@@ -1313,7 +1421,7 @@ export function buildUiHtml(opts?: {
           renderSummary(data);
           renderChanges(data.files);
         } catch(e) {
-          changesListEl.innerHTML = '<div style="padding:16px;color:#f87171;font-size:12px;">Failed to load changes</div>';
+          changesListEl.innerHTML = '<div style="padding:16px;color:#dc2626;font-size:12px;">Failed to load changes</div>';
         }
       }
 
@@ -1333,7 +1441,7 @@ export function buildUiHtml(opts?: {
         var statusDiff = document.getElementById('status-diff');
         if (statusDiff) {
           if (ins || del) {
-            statusDiff.innerHTML = '<span class="d-add">+' + ins + '</span> <span class="d-del">\\u2212' + del + '</span>';
+            statusDiff.innerHTML = '<span class="d-add">+' + ins + '</span> <span class="d-del">-' + del + '</span>';
           } else {
             statusDiff.innerHTML = '';
           }
@@ -1371,14 +1479,14 @@ export function buildUiHtml(opts?: {
         changesListView.style.display = 'none';
         changesDiffView.style.display = 'flex';
         diffFilename.textContent = path;
-        diffContent.innerHTML = '<div style="padding:16px;color:#52525b;font-size:12px;font-family:ui-monospace,monospace;">Loading diff...</div>';
+        diffContent.innerHTML = '<div style="padding:16px;color:#a3a3a3;font-size:12px;font-family:Geist Mono,ui-monospace,monospace;">Loading diff...</div>';
 
         try {
           var res = await fetch('/via/git/diff?path=' + encodeURIComponent(path));
           var data = await res.json();
           renderDiff(data.diff);
         } catch(e) {
-          diffContent.innerHTML = '<div style="padding:16px;color:#f87171;font-size:12px;">Failed to load diff</div>';
+          diffContent.innerHTML = '<div style="padding:16px;color:#dc2626;font-size:12px;">Failed to load diff</div>';
         }
       }
 

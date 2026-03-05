@@ -8,18 +8,27 @@ export function buildIframeHtml(opts: { panelWidth: number }): string {
   <title>viagen</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { display: flex; height: 100vh; background: #09090b; overflow: hidden; }
+    body { display: flex; height: 100vh; background: #ffffff; overflow: hidden; }
     #app-frame { flex: 1; border: none; height: 100%; min-width: 200px; }
     #divider {
-      width: 5px;
+      width: 1px;
       cursor: col-resize;
-      background: #27272a;
+      background: #e5e5e5;
       transition: background 0.15s;
       flex-shrink: 0;
       position: relative;
     }
-    #divider:hover, #divider.active { background: #3f3f46; }
-    #chat-frame { width: ${pw}px; border: none; height: 100%; min-width: 280px; }
+    #divider::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: -2px;
+      right: -2px;
+      z-index: 1;
+    }
+    #divider:hover, #divider.active { background: #a3a3a3; }
+    #chat-frame { width: ${pw}px; border: none; height: 100%; min-width: 280px; background: #ffffff; }
     .dragging iframe { pointer-events: none; }
   </style>
 </head>

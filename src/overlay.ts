@@ -55,9 +55,9 @@ export function buildClientScript(opts: {
         '.window.viagen-fixing .message { opacity: 0.4; }',
         '.window.viagen-fixing .file { opacity: 0.4; }',
         '.window.viagen-fixing .frame { opacity: 0.4; }',
-        '#viagen-fixing-status { display: none; padding: 16px; text-align: center; font-family: system-ui, sans-serif; }',
-        '#viagen-fixing-status .label { font-size: 15px; font-weight: 600; color: #e4e4e7; }',
-        '#viagen-fixing-status .sub { font-size: 12px; color: #71717a; margin-top: 4px; }',
+        '#viagen-fixing-status { display: none; padding: 16px; text-align: center; font-family: Geist, -apple-system, BlinkMacSystemFont, sans-serif; }',
+        '#viagen-fixing-status .label { font-size: 15px; font-weight: 600; color: #171717; }',
+        '#viagen-fixing-status .sub { font-size: 12px; color: #737373; margin-top: 4px; }',
         '#viagen-fixing-status .dot { display: inline-block; animation: viagen-pulse 1.5s ease-in-out infinite; }',
         '.window.viagen-fixing #viagen-fixing-status { display: block; }',
         '.window.viagen-fixing #viagen-fix-btn { display: none; }',
@@ -73,9 +73,9 @@ export function buildClientScript(opts: {
       var btn = document.createElement('button');
       btn.id = 'viagen-fix-btn';
       btn.textContent = 'Fix This Error';
-      btn.style.cssText = 'display:block;width:100%;margin-top:12px;padding:10px 20px;background:#3f3f46;color:#e4e4e7;border:1px solid #52525b;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:system-ui,sans-serif;transition:background 0.15s;';
-      btn.onmouseenter = function() { if (!btn.disabled) btn.style.background = '#52525b'; };
-      btn.onmouseleave = function() { if (!btn.disabled) btn.style.background = '#3f3f46'; };
+      btn.style.cssText = 'display:block;width:100%;margin-top:12px;padding:10px 20px;background:#171717;color:#ffffff;border:1px solid #171717;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;font-family:Geist,-apple-system,BlinkMacSystemFont,sans-serif;transition:background 0.15s;';
+      btn.onmouseenter = function() { if (!btn.disabled) btn.style.background = '#404040'; };
+      btn.onmouseleave = function() { if (!btn.disabled) btn.style.background = '#171717'; };
       btn.addEventListener('click', function() { fixError(win); });
       win.appendChild(btn);
     }, 50);
@@ -121,22 +121,22 @@ export function buildClientScript(opts: {
   var PANEL_WIDTH_KEY = 'viagen_panel_width';
   var panelWidth = ${pw};
   try { var saved = parseInt(sessionStorage.getItem(PANEL_WIDTH_KEY)); if (saved >= 280) panelWidth = saved; } catch(e) {}
-  panel.style.cssText = 'position:fixed;top:0;${panelSide}bottom:0;width:' + panelWidth + 'px;z-index:99997;display:none;border-${pos.includes("left") ? "right" : "left"}:1px solid #27272a;box-shadow:${pos.includes("left") ? "4" : "-4"}px 0 24px rgba(0,0,0,0.5);';
+  panel.style.cssText = 'position:fixed;top:0;${panelSide}bottom:0;width:' + panelWidth + 'px;z-index:99997;display:none;border-${pos.includes("left") ? "right" : "left"}:1px solid #e5e5e5;box-shadow:${pos.includes("left") ? "4" : "-4"}px 0 24px rgba(0,0,0,0.08);';
   var iframe = document.createElement('iframe');
   iframe.src = '/via/ui';
-  iframe.style.cssText = 'width:100%;height:100%;border:none;background:#09090b;';
+  iframe.style.cssText = 'width:100%;height:100%;border:none;background:#ffffff;';
 
   /* ---- Drag-resize handle ---- */
   var handle = document.createElement('div');
   handle.style.cssText = 'position:absolute;top:0;${pos.includes("left") ? "right" : "left"}:-3px;width:6px;height:100%;cursor:col-resize;z-index:1;background:transparent;transition:background 0.15s;';
-  handle.onmouseenter = function() { handle.style.background = '#3f3f46'; };
+  handle.onmouseenter = function() { handle.style.background = '#d4d4d4'; };
   handle.onmouseleave = function() { if (!resizing) handle.style.background = 'transparent'; };
   var resizing = false;
 
   handle.addEventListener('mousedown', function(e) {
     e.preventDefault();
     resizing = true;
-    handle.style.background = '#3f3f46';
+    handle.style.background = '#d4d4d4';
     iframe.style.pointerEvents = 'none';
   });
   document.addEventListener('mousemove', function(e) {
@@ -160,15 +160,15 @@ export function buildClientScript(opts: {
   panel.appendChild(iframe);
   document.body.appendChild(panel);
 
-  var dotColor = '#3f3f46';
+  var dotColor = '#d4d4d4';
   function dotHtml() { return '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + dotColor + ';vertical-align:middle;margin-right:4px;"></span>'; }
 
   var toggle = document.createElement('button');
   toggle.id = 'viagen-toggle';
   toggle.innerHTML = dotHtml() + 'via';
-  toggle.style.cssText = 'position:fixed;${togglePos}z-index:99998;padding:8px 14px;background:#18181b;color:#a1a1aa;border:1px solid #3f3f46;border-radius:20px;font-size:12px;font-weight:600;font-family:ui-monospace,monospace;cursor:pointer;letter-spacing:0.05em;transition:border-color 0.15s,color 0.15s,background 0.15s;box-shadow:0 2px 8px rgba(0,0,0,0.3);';
-  toggle.onmouseenter = function() { toggle.style.borderColor = '#71717a'; toggle.style.color = '#e4e4e7'; };
-  toggle.onmouseleave = function() { if (panel.style.display === 'none') { toggle.style.borderColor = '#3f3f46'; toggle.style.color = '#a1a1aa'; } };
+  toggle.style.cssText = 'position:fixed;${togglePos}z-index:99998;padding:8px 14px;background:#ffffff;color:#525252;border:1px solid #e5e5e5;border-radius:20px;font-size:12px;font-weight:500;font-family:Geist,-apple-system,BlinkMacSystemFont,sans-serif;cursor:pointer;letter-spacing:-0.01em;transition:border-color 0.15s,color 0.15s,background 0.15s,box-shadow 0.15s;box-shadow:0 1px 3px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.04);';
+  toggle.onmouseenter = function() { toggle.style.borderColor = '#d4d4d4'; toggle.style.color = '#171717'; toggle.style.boxShadow = '0 2px 6px rgba(0,0,0,0.1),0 1px 3px rgba(0,0,0,0.06)'; };
+  toggle.onmouseleave = function() { if (panel.style.display === 'none') { toggle.style.borderColor = '#e5e5e5'; toggle.style.color = '#525252'; toggle.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.04)'; } };
 
   fetch('/via/health').then(function(r) { return r.json(); }).then(function(data) {
     dotColor = data.configured ? '#22c55e' : '#ef4444';
@@ -180,12 +180,12 @@ export function buildClientScript(opts: {
 
   function setPanelOpen(open) {
     panel.style.display = open ? 'block' : 'none';
-    toggle.innerHTML = open ? 'close' : dotHtml() + 'via';
+    toggle.innerHTML = open ? '\\u2715' : dotHtml() + 'via';
     toggle.style.${toggleSideKey} = open ? (panelWidth + 14) + 'px' : '${toggleClosedVal}';
     toggle.style.${toggleVerticalKey} = open ? '${pos.includes("top") ? "16" : "11"}px' : '12px';
-    toggle.style.borderColor = open ? '#71717a' : '#3f3f46';
-    toggle.style.color = open ? '#a1a1aa' : '#a1a1aa';
-    toggle.style.background = open ? '#18181b' : '#18181b';
+    toggle.style.borderColor = open ? '#d4d4d4' : '#e5e5e5';
+    toggle.style.color = open ? '#737373' : '#525252';
+    toggle.style.background = open ? '#ffffff' : '#ffffff';
     try { sessionStorage.setItem(PANEL_KEY, open ? '1' : ''); } catch(e) {}
   }
 

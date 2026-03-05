@@ -4,11 +4,11 @@
  */
 export function buildEditorModule(): { css: string; html: string; js: string } {
   const css = `
-    /* ── Prism overrides for viagen dark theme ── */
+    /* ── Prism overrides for viagen light theme ── */
     pre[class*="language-"], code[class*="language-"] {
-      color: #d4d4d8;
+      color: #404040;
       background: none;
-      font-family: ui-monospace, monospace;
+      font-family: 'Geist Mono', ui-monospace, monospace;
       font-size: 12px;
       line-height: 1.6;
       tab-size: 2;
@@ -16,33 +16,33 @@ export function buildEditorModule(): { css: string; html: string; js: string } {
       word-break: normal;
       word-wrap: normal;
     }
-    .token.comment, .token.prolog, .token.doctype, .token.cdata { color: #6b7280; font-style: italic; }
-    .token.punctuation { color: #a1a1aa; }
-    .token.property, .token.tag, .token.boolean, .token.number, .token.constant, .token.symbol { color: #f9a8d4; }
-    .token.selector, .token.attr-name, .token.string, .token.char, .token.builtin { color: #86efac; }
-    .token.operator, .token.entity, .token.url { color: #93c5fd; }
-    .token.atrule, .token.attr-value, .token.keyword { color: #c4b5fd; }
-    .token.function, .token.class-name { color: #fde68a; }
-    .token.regex, .token.important, .token.variable { color: #fca5a5; }
+    .token.comment, .token.prolog, .token.doctype, .token.cdata { color: #a3a3a3; font-style: italic; }
+    .token.punctuation { color: #737373; }
+    .token.property, .token.tag, .token.boolean, .token.number, .token.constant, .token.symbol { color: #c026d3; }
+    .token.selector, .token.attr-name, .token.string, .token.char, .token.builtin { color: #16a34a; }
+    .token.operator, .token.entity, .token.url { color: #2563eb; }
+    .token.atrule, .token.attr-value, .token.keyword { color: #7c3aed; }
+    .token.function, .token.class-name { color: #ca8a04; }
+    .token.regex, .token.important, .token.variable { color: #dc2626; }
 
     /* ── File tree ── */
     .file-tree { padding: 4px 0; }
     .tree-item {
       display: flex;
       align-items: center;
-      padding: 4px 8px;
-      font-family: ui-monospace, monospace;
+      padding: 5px 8px;
+      font-family: 'Geist Mono', ui-monospace, monospace;
       font-size: 12px;
-      color: #a1a1aa;
+      color: #525252;
       cursor: pointer;
-      transition: background 0.1s;
+      transition: background 0.1s, color 0.1s;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       user-select: none;
     }
-    .tree-item:hover { background: #18181b; color: #e4e4e7; }
-    .tree-item.active { background: #1e1e22; color: #e4e4e7; }
+    .tree-item:hover { background: #fafafa; color: #171717; }
+    .tree-item.active { background: #f5f5f5; color: #171717; }
     .tree-arrow {
       display: inline-flex;
       align-items: center;
@@ -51,7 +51,7 @@ export function buildEditorModule(): { css: string; html: string; js: string } {
       height: 16px;
       flex-shrink: 0;
       font-size: 8px;
-      color: #52525b;
+      color: #a3a3a3;
       transition: transform 0.15s;
     }
     .tree-arrow.expanded { transform: rotate(90deg); }
@@ -60,7 +60,7 @@ export function buildEditorModule(): { css: string; html: string; js: string } {
       flex-shrink: 0;
       margin-right: 6px;
       font-size: 10px;
-      color: #52525b;
+      color: #a3a3a3;
     }
     .tree-label {
       overflow: hidden;
@@ -75,8 +75,9 @@ export function buildEditorModule(): { css: string; html: string; js: string } {
     }
     .editor-tree-pane {
       overflow-y: auto;
-      border-right: 1px solid #27272a;
+      border-right: 1px solid #e5e5e5;
       flex-shrink: 0;
+      background: #ffffff;
     }
     .editor-main-pane {
       flex: 1;
@@ -86,28 +87,28 @@ export function buildEditorModule(): { css: string; html: string; js: string } {
     }
     .editor-header {
       padding: 8px 12px;
-      border-bottom: 1px solid #27272a;
+      border-bottom: 1px solid #e5e5e5;
       display: flex;
       align-items: center;
       gap: 8px;
       flex-shrink: 0;
-      background: #18181b;
+      background: #fafafa;
     }
     .editor-back {
       background: none;
       border: none;
-      color: #a1a1aa;
+      color: #a3a3a3;
       font-size: 16px;
       cursor: pointer;
       padding: 2px 6px;
       line-height: 1;
     }
-    .editor-back:hover { color: #e4e4e7; }
+    .editor-back:hover { color: #171717; }
     .editor-filename {
       flex: 1;
-      font-family: ui-monospace, monospace;
+      font-family: 'Geist Mono', ui-monospace, monospace;
       font-size: 12px;
-      color: #d4d4d8;
+      color: #525252;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -124,17 +125,17 @@ export function buildEditorModule(): { css: string; html: string; js: string } {
       bottom: 0;
       width: 40px;
       padding: 8px 8px 8px 0;
-      font-family: ui-monospace, monospace;
+      font-family: 'Geist Mono', ui-monospace, monospace;
       font-size: 12px;
       line-height: 1.6;
       white-space: pre;
-      color: #3f3f46;
+      color: #d4d4d4;
       text-align: right;
       user-select: none;
       pointer-events: none;
       overflow: hidden;
-      background: #0a0a0c;
-      border-right: 1px solid #1e1e22;
+      background: #fafafa;
+      border-right: 1px solid #e5e5e5;
       z-index: 2;
     }
     .editor-highlight {
@@ -144,14 +145,14 @@ export function buildEditorModule(): { css: string; html: string; js: string } {
       right: 0;
       bottom: 0;
       padding: 8px 12px 8px 48px;
-      font-family: ui-monospace, monospace;
+      font-family: 'Geist Mono', ui-monospace, monospace;
       font-size: 12px;
       line-height: 1.6;
       tab-size: 2;
       white-space: pre;
       overflow: auto;
-      color: #d4d4d8;
-      background: #09090b;
+      color: #404040;
+      background: #ffffff;
       margin: 0;
       border: none;
       z-index: 0;
@@ -172,7 +173,7 @@ export function buildEditorModule(): { css: string; html: string; js: string } {
       width: 100%;
       height: 100%;
       padding: 8px 12px 8px 48px;
-      font-family: ui-monospace, monospace;
+      font-family: 'Geist Mono', ui-monospace, monospace;
       font-size: 12px;
       line-height: 1.6;
       tab-size: 2;
@@ -180,7 +181,7 @@ export function buildEditorModule(): { css: string; html: string; js: string } {
       overflow: auto;
       background: transparent;
       color: transparent;
-      caret-color: #e4e4e7;
+      caret-color: #171717;
       border: none;
       resize: none;
       outline: none;
@@ -192,14 +193,14 @@ export function buildEditorModule(): { css: string; html: string; js: string } {
       align-items: center;
       justify-content: center;
       padding: 16px;
-      background: #09090b;
+      background: #fafafa;
       overflow: auto;
     }
     .editor-image-wrap img {
       max-width: 100%;
       max-height: 100%;
       object-fit: contain;
-      border-radius: 4px;
+      border-radius: 6px;
     }
   `;
 
@@ -333,7 +334,7 @@ export function buildEditorModule(): { css: string; html: string; js: string } {
           row.className = 'tree-item';
           row.style.paddingLeft = (8 + depth * 16) + 'px';
           row.innerHTML = '<span class="tree-arrow ' + (isExpanded ? 'expanded' : '') + '">&#x25B6;</span>' +
-            '<span class="tree-icon">&#x1F4C1;</span>' +
+            '<span class="tree-icon" style="color:#a3a3a3;">&#x1F4C1;</span>' +
             '<span class="tree-label">' + escapeHtml(dirName) + '</span>';
           container.appendChild(row);
 
@@ -364,7 +365,7 @@ export function buildEditorModule(): { css: string; html: string; js: string } {
           row.style.paddingLeft = (8 + depth * 16) + 'px';
           row.dataset.path = file.path;
           row.innerHTML = '<span class="tree-arrow hidden">&#x25B6;</span>' +
-            '<span class="tree-icon" style="color:#52525b;">&#x25A1;</span>' +
+            '<span class="tree-icon" style="color:#d4d4d4;">&#x25A1;</span>' +
             '<span class="tree-label">' + escapeHtml(file.name) + '</span>';
           row.addEventListener('click', function() { openFile(file.path); });
           container.appendChild(row);
@@ -374,7 +375,7 @@ export function buildEditorModule(): { css: string; html: string; js: string } {
       function renderFileTree(files) {
         fileTree.innerHTML = '';
         if (files.length === 0) {
-          fileTree.innerHTML = '<div style="padding:16px;color:#52525b;font-size:12px;">No editable files configured</div>';
+          fileTree.innerHTML = '<div style="padding:16px;color:#a3a3a3;font-size:12px;">No editable files configured</div>';
           return;
         }
         // Default: expand all directories
@@ -400,14 +401,14 @@ export function buildEditorModule(): { css: string; html: string; js: string } {
         checkWideMode();
         updateLayout(false);
 
-        fileTree.innerHTML = '<div style="padding:16px;color:#52525b;font-size:12px;font-family:ui-monospace,monospace;">Loading...</div>';
+        fileTree.innerHTML = '<div style="padding:16px;color:#a3a3a3;font-size:12px;font-family:Geist Mono,ui-monospace,monospace;">Loading...</div>';
         try {
           var res = await fetch('/via/files');
           var data = await res.json();
           cachedFiles = data.files;
           renderFileTree(data.files);
         } catch(e) {
-          fileTree.innerHTML = '<div style="padding:16px;color:#f87171;font-size:12px;">Failed to load files</div>';
+          fileTree.innerHTML = '<div style="padding:16px;color:#dc2626;font-size:12px;">Failed to load files</div>';
         }
       }
 
