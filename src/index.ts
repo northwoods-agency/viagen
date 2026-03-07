@@ -231,11 +231,7 @@ export function viagen(options?: ViagenOptions): Plugin {
         debug("server", "creating viagen MCP tools (sandbox mode)");
         const viagenMcp = createViagenTools(
           env["VIAGEN_PROJECT_ID"]
-            ? {
-                authToken: env["VIAGEN_AUTH_TOKEN"],
-                platformUrl: env["VIAGEN_PLATFORM_URL"] || "https://app.viagen.dev",
-                projectId: env["VIAGEN_PROJECT_ID"],
-              }
+            ? { projectId: env["VIAGEN_PROJECT_ID"] }
             : undefined,
         );
         mcpServers = { [viagenMcp.name]: viagenMcp };

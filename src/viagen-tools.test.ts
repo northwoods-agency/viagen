@@ -2,16 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("viagen-sdk/sandbox", () => ({
   updateTask: vi.fn().mockResolvedValue(undefined),
-}));
-
-vi.mock("viagen-sdk", () => ({
-  createViagen: vi.fn().mockReturnValue({
-    tasks: {
-      list: vi.fn().mockResolvedValue([]),
-      get: vi.fn().mockResolvedValue({ id: "task_1", prompt: "test" }),
-      create: vi.fn().mockResolvedValue({ id: "task_2", prompt: "new task" }),
-    },
-  }),
+  listTasks: vi.fn().mockResolvedValue([]),
+  getTask: vi.fn().mockResolvedValue({ id: "task_1", prompt: "test" }),
+  createTask: vi.fn().mockResolvedValue({ id: "task_2", prompt: "new task" }),
 }));
 
 // Must import after mock is set up
@@ -33,15 +26,10 @@ describe("createViagenTools", () => {
   it("without config, only exposes viagen_update_task", () => {
     const result = createViagenTools();
     expect(result).toBeDefined();
-    // No config = no CRUD tools, just update
   });
 
   it("with config, exposes all 4 tools", () => {
-    const result = createViagenTools({
-      authToken: "test-token",
-      platformUrl: "https://app.viagen.dev",
-      projectId: "proj_123",
-    });
+    const result = createViagenTools({ projectId: "proj_123" });
     expect(result).toBeDefined();
     expect(result.name).toBe("viagen");
   });

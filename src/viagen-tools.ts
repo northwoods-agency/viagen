@@ -5,12 +5,14 @@ import {
   type McpSdkServerConfigWithInstance,
   type CanUseTool,
 } from "@anthropic-ai/claude-agent-sdk";
-import { updateTask } from "viagen-sdk/sandbox";
-import { createViagen, type ViagenClient } from "viagen-sdk";
+import {
+  updateTask,
+  listTasks,
+  getTask,
+  createTask,
+} from "viagen-sdk/sandbox";
 
 export interface ViagenToolsConfig {
-  authToken: string;
-  platformUrl: string;
   projectId: string;
 }
 
@@ -18,22 +20,12 @@ export interface ViagenToolsConfig {
  * Creates an in-process MCP tool server that exposes platform reporting tools.
  * Used when running inside a viagen sandbox (VIAGEN_CALLBACK_URL etc. are set).
  *
- * When `config` is provided, also exposes task CRUD tools (list, get, create).
+ * When `config` is provided, also exposes task CRUD tools (list, get, create)
+ * via the sandbox callback proxy.
  */
 export function createViagenTools(
   config?: ViagenToolsConfig,
 ): McpSdkServerConfigWithInstance {
-  let client: ViagenClient | undefined;
-  let projectId: string | undefined;
-
-  if (config) {
-    client = createViagen({
-      baseUrl: config.platformUrl,
-      token: config.authToken,
-    });
-    projectId = config.projectId;
-  }
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tools: any[] = [
     tool(
@@ -81,11 +73,8 @@ export function createViagenTools(
     ),
   ];
 
-  // Add CRUD tools when SDK client is available
-  if (client && projectId) {
-    const c = client;
-    const pid = projectId;
-
+  // Add CRUD tools when project context is available
+  if (config) {
     tools.push(
       tool(
         "viagen_list_tasks",
@@ -97,7 +86,7 @@ export function createViagenTools(
             .describe("Filter tasks by status."),
         },
         async (args) => {
-          const tasks = await c.tasks.list(pid, args.status);
+          const tasks = await listTasks({ status: args.status });
           return {
             content: [
               {
@@ -118,7 +107,7 @@ export function createViagenTools(
           taskId: z.string().describe("The task ID to retrieve."),
         },
         async (args) => {
-          const task = await c.tasks.get(pid, args.taskId);
+          const task = await getTask(args.taskId);
           return {
             content: [
               {
@@ -149,7 +138,7 @@ export function createViagenTools(
             .describe("Task type: 'task' for code changes, 'plan' for implementation plans."),
         },
         async (args) => {
-          const task = await c.tasks.create(pid, {
+          const task = await createTask({
             prompt: args.prompt,
             branch: args.branch,
             type: args.type,
@@ -192,8 +181,6 @@ export const planModeCanUseTool: CanUseTool = async (toolName, input) => {
 
 /**
  * System prompt for plan-mode tasks.
- * The agent explores the codebase and produces a markdown plan without
- * modifying existing code.
  */
 export const PLAN_SYSTEM_PROMPT = `
 You are running in PLAN mode. Your job is to explore the codebase and produce a detailed implementation plan — you must NOT modify any existing code.
