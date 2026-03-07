@@ -1077,7 +1077,7 @@ export function buildUiHtml(opts?: {
             var taskUrl = 'https://app.viagen.dev/projects/' + healthProjectId + '/tasks/' + healthTaskId;
             var div = document.createElement('div');
             div.className = 'msg msg-user';
-            div.innerHTML = '<span class="label">Task</span><span class="text">Working on <a href="' + escapeHtml(taskUrl) + '" target="_blank" style="color:#2563eb;text-decoration:underline;">Via Task</a></span>';
+            div.innerHTML = '<span class="label">Task</span><span class="text" style="white-space:nowrap;">Working on <a href="' + escapeHtml(taskUrl) + '" target="_blank" style="color:#2563eb;text-decoration:underline;">Via Task</a></span>';
             messagesEl.appendChild(div);
           } else {
             renderUserMessage(entry.text);
@@ -1974,7 +1974,7 @@ export function buildUiHtml(opts?: {
             var taskUrl = 'https://app.viagen.dev/projects/' + data.projectId + '/tasks/' + data.taskId;
             var div = document.createElement('div');
             div.className = 'msg msg-user';
-            div.innerHTML = '<span class="label">Task</span><span class="text">Working on <a href="' + escapeHtml(taskUrl) + '" target="_blank" style="color:#2563eb;text-decoration:underline;">Via Task</a></span>';
+            div.innerHTML = '<span class="label">Task</span><span class="text" style="white-space:nowrap;">Working on <a href="' + escapeHtml(taskUrl) + '" target="_blank" style="color:#2563eb;text-decoration:underline;">Via Task</a></span>';
             messagesEl.appendChild(div);
             scrollToBottom();
             // Send the prompt silently (don't show it as a user message)
