@@ -1,5 +1,11 @@
-import { readdirSync, readFileSync, writeFileSync, statSync } from "node:fs";
-import { join, resolve, relative, basename } from "node:path";
+import {
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  statSync,
+} from "node:fs";
+import { join, resolve, relative, basename, dirname } from "node:path";
 import type { IncomingMessage } from "node:http";
 import type { ViteDevServer } from "vite";
 
@@ -204,7 +210,7 @@ export function registerFileRoutes(
     }
 
     if (req.method === "POST") {
-      let body: { path?: string; content?: string };
+      let body: { path?: string; content?: string; encoding?: string };
       try {
         body = JSON.parse(await readBody(req));
       } catch {
@@ -219,14 +225,23 @@ export function registerFileRoutes(
         res.end(JSON.stringify({ error: "Missing path or content" }));
         return;
       }
-      if (!isPathAllowed(writePath, resolvedPatterns, opts.projectRoot)) {
+      const isViagen = writePath.startsWith(".viagen/");
+      if (
+        !isViagen &&
+        !isPathAllowed(writePath, resolvedPatterns, opts.projectRoot)
+      ) {
         res.statusCode = 403;
         res.end(JSON.stringify({ error: "Path not in editable list" }));
         return;
       }
       const abs = resolve(opts.projectRoot, writePath);
       try {
-        writeFileSync(abs, writeContent, "utf-8");
+        mkdirSync(dirname(abs), { recursive: true });
+        if (body.encoding === "base64") {
+          writeFileSync(abs, Buffer.from(writeContent, "base64"));
+        } else {
+          writeFileSync(abs, writeContent, "utf-8");
+        }
         res.setHeader("Content-Type", "application/json");
         res.end(JSON.stringify({ status: "ok", path: writePath }));
       } catch (err) {

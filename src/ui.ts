@@ -567,7 +567,8 @@ export function buildUiHtml(opts?: {
       font-family: inherit;
       outline: none;
       resize: none;
-      height: 24px;
+      height: auto;
+      min-height: 20px;
       overflow: hidden;
       line-height: 1.5;
     }
@@ -596,7 +597,45 @@ export function buildUiHtml(opts?: {
     .send-btn:hover { background: #e5e5e5; color: #525252; }
     .send-btn.active { background: #171717; color: #ffffff; border-color: #171717; }
     .send-btn.active:hover { background: #404040; border-color: #404040; }
+    .attach-btn {
+      padding: 6px 6px;
+      background: transparent;
+      color: #a3a3a3;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.15s, background 0.15s;
+      margin-right: 2px;
+    }
+    .attach-btn:hover { color: #525252; background: #f5f5f5; }
     .send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .send-btn.stop { background: #ef4444; color: #ffffff; border-color: #ef4444; opacity: 1; cursor: pointer; }
+    .send-btn.stop:hover { background: #dc2626; border-color: #dc2626; }
+    .drop-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(37,99,235,0.08);
+      border: 2px dashed #2563eb;
+      border-radius: 12px;
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+    .drop-overlay.visible { display: flex; }
+    .drop-overlay span {
+      font-size: 13px;
+      font-weight: 600;
+      color: #2563eb;
+      background: #ffffff;
+      padding: 8px 16px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
     .status-bar {
       display: none;
       align-items: center;
@@ -887,7 +926,8 @@ export function buildUiHtml(opts?: {
   </div>`
       : ""
   }
-  <div id="chat-view" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+  <div id="chat-view" style="display:flex;flex-direction:column;flex:1;overflow:hidden;position:relative;">
+    <div class="drop-overlay" id="drop-overlay"><span>Drop files to upload</span></div>
     <div class="setup-banner" id="setup-banner"></div>
 
     <div class="activity-bar" id="activity-bar"></div>
@@ -897,6 +937,8 @@ export function buildUiHtml(opts?: {
       <div class="input-wrap" id="input-wrap">
         <textarea id="input" rows="1" placeholder="What do you want to build?" autofocus></textarea>
         <div class="input-bottom">
+          <input type="file" id="file-input" multiple style="display:none;">
+          <button class="attach-btn" id="attach-btn" title="Upload files"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></button>
           <button class="send-btn" id="send-btn"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg></button>
         </div>
       </div>
@@ -998,7 +1040,7 @@ export function buildUiHtml(opts?: {
 
     function scrollToBottom() {
       requestAnimationFrame(function() {
-        scrollToBottom();
+        messagesEl.scrollTop = messagesEl.scrollHeight;
       });
     }
 
@@ -1077,7 +1119,7 @@ export function buildUiHtml(opts?: {
             var taskUrl = 'https://app.viagen.dev/projects/' + healthProjectId + '/tasks/' + healthTaskId;
             var div = document.createElement('div');
             div.className = 'msg msg-user';
-            div.innerHTML = '<span class="label">Task</span><span class="text" style="white-space:nowrap;">Working on <a href="' + escapeHtml(taskUrl) + '" target="_blank" style="color:#2563eb;text-decoration:underline;">Via Task</a></span>';
+            div.innerHTML = '<span class="label">Task</span><span class="text">Working on <a href="' + escapeHtml(taskUrl) + '" target="_blank" style="color:#2563eb;text-decoration:underline;">Via Task</a></span>';
             messagesEl.appendChild(div);
           } else {
             renderUserMessage(entry.text);
@@ -1655,23 +1697,35 @@ export function buildUiHtml(opts?: {
     }
     inputEl.addEventListener('input', function() { autoResize(); updateSendActive(); });
 
+    var currentAbort = null;
     function setStreaming(v) {
       isStreaming = v;
       inputEl.disabled = v;
       document.getElementById('input-wrap').classList.toggle('disabled', v);
-      sendBtn.disabled = v;
-      sendBtn.innerHTML = v ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>' : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>';
+      if (v) {
+        sendBtn.disabled = false;
+        sendBtn.classList.add('stop');
+        sendBtn.classList.remove('active');
+        sendBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>';
+      } else {
+        sendBtn.classList.remove('stop');
+        sendBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>';
+        currentAbort = null;
+      }
       updateSendActive();
       if (v) stopHistoryPolling();
       else startHistoryPolling();
     }
 
     async function sendRaw(text) {
+      var abort = new AbortController();
+      currentAbort = abort;
       try {
         var res = await fetch('/via/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message: text }),
+          signal: abort.signal,
         });
 
         var reader = res.body.getReader();
@@ -1708,13 +1762,17 @@ export function buildUiHtml(opts?: {
           }
         }
       } catch (e) {
-        if (!unloading) addErrorBlock('Connection failed');
+        if (abort.signal.aborted) {
+          // User cancelled — not an error
+        } else if (!unloading) {
+          addErrorBlock('Connection failed');
+        }
       }
 
       closeToolGroup();
       closeAllTaskGroups('completed');
       hideActivity(lastUsage);
-      playDoneSound();
+      if (!abort.signal.aborted) playDoneSound();
       historyTimestamp = Date.now();
       setStreaming(false);
       markCommittedFiles();
@@ -1741,7 +1799,13 @@ export function buildUiHtml(opts?: {
       await sendRaw(text);
     }
 
-    sendBtn.addEventListener('click', send);
+    sendBtn.addEventListener('click', function() {
+      if (isStreaming && currentAbort) {
+        currentAbort.abort();
+        return;
+      }
+      send();
+    });
     inputEl.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
     });
@@ -1753,6 +1817,79 @@ export function buildUiHtml(opts?: {
       currentTextSpan = null;
       inputEl.focus();
     });
+    // ── Drag & drop file upload ──
+    var chatView = document.getElementById('chat-view');
+    var dropOverlay = document.getElementById('drop-overlay');
+    var dragCounter = 0;
+    chatView.addEventListener('dragenter', function(e) {
+      e.preventDefault();
+      dragCounter++;
+      dropOverlay.classList.add('visible');
+    });
+    chatView.addEventListener('dragleave', function(e) {
+      e.preventDefault();
+      dragCounter--;
+      if (dragCounter <= 0) { dragCounter = 0; dropOverlay.classList.remove('visible'); }
+    });
+    chatView.addEventListener('dragover', function(e) { e.preventDefault(); });
+    function readFileAsBase64(file) {
+      return new Promise(function(resolve) {
+        var reader = new FileReader();
+        reader.onload = function() {
+          var result = reader.result;
+          resolve(result.split(',')[1] || result);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+    var MAX_UPLOAD_SIZE = 10 * 1024 * 1024; // 10MB
+    async function uploadFiles(files) {
+      if (!files || !files.length) return;
+      var uploaded = [];
+      for (var i = 0; i < files.length; i++) {
+        var file = files[i];
+        if (file.size > MAX_UPLOAD_SIZE) {
+          addErrorBlock(file.name + ' is too large (max 10MB)');
+          continue;
+        }
+        var isText = file.type.startsWith('text/') || /\\.(json|md|txt|csv|js|ts|jsx|tsx|css|html|xml|yaml|yml|toml|sh|py|rb|go|rs|sql|env|log|cfg|ini|conf)$/i.test(file.name);
+        try {
+          var payload;
+          if (isText) {
+            payload = { path: '.viagen/uploads/' + file.name, content: await file.text() };
+          } else {
+            payload = { path: '.viagen/uploads/' + file.name, content: await readFileAsBase64(file), encoding: 'base64' };
+          }
+          await fetch('/via/file', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          uploaded.push(file.name);
+        } catch (err) {
+          addErrorBlock('Failed to upload ' + file.name);
+        }
+      }
+      if (uploaded.length > 0) {
+        var msg = uploaded.length === 1
+          ? 'I just uploaded a file: .viagen/uploads/' + uploaded[0] + '. Take a look and let me know what you think.'
+          : 'I just uploaded ' + uploaded.length + ' files to .viagen/uploads/: ' + uploaded.join(', ') + '. Take a look and let me know what you think.';
+        inputEl.value = msg;
+        send();
+      }
+    }
+    chatView.addEventListener('drop', async function(e) {
+      e.preventDefault();
+      dragCounter = 0;
+      dropOverlay.classList.remove('visible');
+      uploadFiles(e.dataTransfer ? e.dataTransfer.files : []);
+    });
+
+    // ── Paperclip file picker ──
+    var fileInput = document.getElementById('file-input');
+    document.getElementById('attach-btn').addEventListener('click', function() { fileInput.click(); });
+    fileInput.addEventListener('change', function() { uploadFiles(fileInput.files); fileInput.value = ''; });
+
     // ── View mode detection ──
     var viewMode = 'overlay';
     if (window.self === window.top) viewMode = 'standalone';
@@ -1974,7 +2111,7 @@ export function buildUiHtml(opts?: {
             var taskUrl = 'https://app.viagen.dev/projects/' + data.projectId + '/tasks/' + data.taskId;
             var div = document.createElement('div');
             div.className = 'msg msg-user';
-            div.innerHTML = '<span class="label">Task</span><span class="text" style="white-space:nowrap;">Working on <a href="' + escapeHtml(taskUrl) + '" target="_blank" style="color:#2563eb;text-decoration:underline;">Via Task</a></span>';
+            div.innerHTML = '<span class="label">Task</span><span class="text">Working on <a href="' + escapeHtml(taskUrl) + '" target="_blank" style="color:#2563eb;text-decoration:underline;">Via Task</a></span>';
             messagesEl.appendChild(div);
             scrollToBottom();
             // Send the prompt silently (don't show it as a user message)
