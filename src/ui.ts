@@ -1074,10 +1074,10 @@ export function buildUiHtml(opts?: {
           chatLog.push({ type: 'user', content: entry.text });
           // First user message in task mode: show task link instead of raw prompt
           if (chatLog.filter(function(e) { return e.type === 'user'; }).length === 1 && healthTaskId) {
-            var taskUrl = 'https://app.viagen.dev' + (data.projectId ? '/' + data.projectId : '') + '/' + data.taskId;
+            var taskUrl = 'https://app.viagen.dev/projects/' + healthProjectId + '/tasks/' + healthTaskId;
             var div = document.createElement('div');
             div.className = 'msg msg-user';
-            div.innerHTML = '<span class="label">Task</span><span class="text">Received instructions from <a href="' + escapeHtml(taskUrl) + '" target="_blank" style="color:#2563eb;text-decoration:underline;">Viagen Task</a></span>';
+            div.innerHTML = '<span class="label">Task</span><span class="text">Working on <a href="' + escapeHtml(taskUrl) + '" target="_blank" style="color:#2563eb;text-decoration:underline;">Via Task</a></span>';
             messagesEl.appendChild(div);
           } else {
             renderUserMessage(entry.text);
@@ -1971,10 +1971,10 @@ export function buildUiHtml(opts?: {
         if (data.prompt && data.configured && chatLog.length === 0) {
           if (data.taskId) {
             // Task mode: show link instead of raw prompt
-            var taskUrl = 'https://app.viagen.dev' + (data.projectId ? '/' + data.projectId : '') + '/' + data.taskId;
+            var taskUrl = 'https://app.viagen.dev/projects/' + data.projectId + '/tasks/' + data.taskId;
             var div = document.createElement('div');
             div.className = 'msg msg-user';
-            div.innerHTML = '<span class="label">Task</span><span class="text">Received instructions from <a href="' + escapeHtml(taskUrl) + '" target="_blank" style="color:#2563eb;text-decoration:underline;">Viagen Task</a></span>';
+            div.innerHTML = '<span class="label">Task</span><span class="text">Working on <a href="' + escapeHtml(taskUrl) + '" target="_blank" style="color:#2563eb;text-decoration:underline;">Via Task</a></span>';
             messagesEl.appendChild(div);
             scrollToBottom();
             // Send the prompt silently (don't show it as a user message)
