@@ -226,7 +226,7 @@ export function viagen(options?: ViagenOptions): Plugin {
 
       // MCP tools — created when running inside a viagen sandbox with task context
       let mcpServers: Record<string, McpServerConfig> | undefined;
-      const hasSandboxContext = !!(env["VIAGEN_CALLBACK_URL"] && env["VIAGEN_AUTH_TOKEN"] && env["VIAGEN_TASK_ID"]);
+      const hasSandboxContext = !!(env["VIAGEN_CALLBACK_URL"] && env["VIAGEN_AUTH_TOKEN"]);
       if (hasSandboxContext) {
         debug("server", "creating viagen MCP tools (sandbox mode)");
         const viagenMcp = createViagenTools(
@@ -291,6 +291,25 @@ export function viagen(options?: ViagenOptions): Plugin {
           if (event.type === "done") {
             debug("server", "auto-prompt completed");
             logBuffer.push("info", `[viagen] Prompt completed`);
+            // Report usage to platform callback
+            const taskId = env["VIAGEN_TASK_ID"];
+            if (hasSandboxContext && taskId && (event.inputTokens || event.outputTokens || event.costUsd)) {
+              fetch(env["VIAGEN_CALLBACK_URL"], {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${env["VIAGEN_AUTH_TOKEN"]}`,
+                },
+                body: JSON.stringify({
+                  taskId,
+                  ...(event.inputTokens != null && { inputTokens: event.inputTokens }),
+                  ...(event.outputTokens != null && { outputTokens: event.outputTokens }),
+                  ...(event.costUsd != null && { costUsd: event.costUsd }),
+                }),
+              }).catch((err) => {
+                debug("server", `usage callback failed: ${err}`);
+              });
+            }
           }
         });
       }

@@ -701,8 +701,35 @@ export function registerChatRoutes(
         done = true;
         debug("chat", "SSE stream done, closing response");
         if (!res.writableEnded) {
-          res.write("event: done\ndata: {}\n\n");
+          const doneData = {
+            ...(event.costUsd != null && { costUsd: event.costUsd }),
+            ...(event.inputTokens != null && { inputTokens: event.inputTokens }),
+            ...(event.outputTokens != null && { outputTokens: event.outputTokens }),
+            ...(event.durationMs != null && { durationMs: event.durationMs }),
+          };
+          res.write(`event: done\ndata: ${JSON.stringify(doneData)}\n\n`);
           res.end();
+        }
+        // Report usage to viagen platform callback if in sandbox mode
+        if (opts.env["VIAGEN_CALLBACK_URL"] && opts.env["VIAGEN_AUTH_TOKEN"]) {
+          const taskId = opts.env["VIAGEN_TASK_ID"];
+          if (taskId && (event.inputTokens || event.outputTokens || event.costUsd)) {
+            fetch(opts.env["VIAGEN_CALLBACK_URL"], {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${opts.env["VIAGEN_AUTH_TOKEN"]}`,
+              },
+              body: JSON.stringify({
+                taskId,
+                ...(event.inputTokens != null && { inputTokens: event.inputTokens }),
+                ...(event.outputTokens != null && { outputTokens: event.outputTokens }),
+                ...(event.costUsd != null && { costUsd: event.costUsd }),
+              }),
+            }).catch((err) => {
+              debug("chat", `usage callback failed: ${err}`);
+            });
+          }
         }
         return;
       }

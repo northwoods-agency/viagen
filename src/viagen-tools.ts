@@ -6,14 +6,13 @@ import {
   type CanUseTool,
 } from "@anthropic-ai/claude-agent-sdk";
 import {
-  updateTask,
   listTasks,
   getTask,
   createTask,
 } from "viagen-sdk/sandbox";
 
 export interface ViagenToolsConfig {
-  projectId: string;
+  projectId?: string;
 }
 
 /**
@@ -30,8 +29,12 @@ export function createViagenTools(
   const tools: any[] = [
     tool(
       "viagen_update_task",
-      "Report task status back to the viagen platform. Use status 'review' after creating a PR (ready for human review) or 'completed' when the task is fully done.",
+      "Update a task's status on the viagen platform. Use status 'review' after creating a PR (ready for human review) or 'completed' when the task is fully done. If no taskId is provided, updates the current task (requires VIAGEN_TASK_ID env var).",
       {
+        taskId: z
+          .string()
+          .optional()
+          .describe("Task ID to update. Defaults to the current task from VIAGEN_TASK_ID env var."),
         status: z.enum(["review", "completed"]).describe(
           "'review' = PR created, ready for review. 'completed' = task fully done.",
         ),
@@ -51,30 +54,53 @@ export function createViagenTools(
           .number()
           .optional()
           .describe("Total cost in USD."),
+        prReviewStatus: z
+          .enum(["approved", "changes_requested", "commented"])
+          .optional()
+          .describe("PR review outcome, if applicable."),
       },
       async (args) => {
-        await updateTask({
-          status: args.status,
-          prUrl: args.prUrl,
-          result: args.result,
-          inputTokens: args.inputTokens,
-          outputTokens: args.outputTokens,
-          costUsd: args.costUsd,
+        const taskId = args.taskId || process.env["VIAGEN_TASK_ID"];
+        if (!taskId) {
+          return {
+            content: [{ type: "text" as const, text: "Error: No taskId provided and VIAGEN_TASK_ID is not set." }],
+          };
+        }
+        const callbackUrl = process.env["VIAGEN_CALLBACK_URL"]!;
+        const authToken = process.env["VIAGEN_AUTH_TOKEN"]!;
+        const internalStatus = args.status === "review" ? "validating" : "completed";
+        const res = await fetch(callbackUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({
+            taskId,
+            status: internalStatus,
+            ...(args.prUrl && { prUrl: args.prUrl }),
+            result: args.result,
+            ...(args.inputTokens != null && { inputTokens: args.inputTokens }),
+            ...(args.outputTokens != null && { outputTokens: args.outputTokens }),
+            ...(args.costUsd != null && { costUsd: args.costUsd }),
+            ...(args.prReviewStatus && { prReviewStatus: args.prReviewStatus }),
+          }),
         });
+        if (!res.ok) {
+          const text = await res.text().catch(() => "");
+          return {
+            content: [{ type: "text" as const, text: `Error updating task (${res.status}): ${text}` }],
+          };
+        }
         return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Task status updated to '${args.status}'.`,
-            },
-          ],
+          content: [{ type: "text" as const, text: `Task ${taskId} status updated to '${args.status}'.` }],
         };
       },
     ),
   ];
 
   // Add CRUD tools when project context is available
-  if (config) {
+  if (config?.projectId) {
     tools.push(
       tool(
         "viagen_list_tasks",
@@ -205,7 +231,7 @@ You have access to viagen platform tools for task management:
 - viagen_list_tasks: List tasks in this project (optionally filter by status)
 - viagen_get_task: Get full details of a specific task
 - viagen_create_task: Create follow-up tasks for work you identify
-- viagen_update_task: Report your current task status ('review' or 'completed')
+- viagen_update_task: Update a task's status ('review' or 'completed'). Accepts an optional taskId — defaults to the current task if one is set.
 
 Use these to understand project context and create follow-up work when appropriate.
 `;
