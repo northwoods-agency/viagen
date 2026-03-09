@@ -35,9 +35,10 @@ export function createViagenTools(
           .string()
           .optional()
           .describe("Task ID to update. Defaults to the current task from VIAGEN_TASK_ID env var."),
-        status: z.enum(["review", "completed"]).describe(
-          "'review' = PR created, ready for review. 'completed' = task fully done.",
-        ),
+        status: z
+          .string()
+          .optional()
+          .describe("Task status to set (e.g. 'review', 'completed'). Omit to update other fields without changing status."),
         prUrl: z
           .string()
           .optional()
@@ -68,7 +69,7 @@ export function createViagenTools(
         }
         const callbackUrl = process.env["VIAGEN_CALLBACK_URL"]!;
         const authToken = process.env["VIAGEN_AUTH_TOKEN"]!;
-        const internalStatus = args.status === "review" ? "validating" : "completed";
+        const internalStatus = args.status === "review" ? "validating" : args.status === "completed" ? "completed" : args.status;
         const res = await fetch(callbackUrl, {
           method: "POST",
           headers: {
@@ -77,7 +78,7 @@ export function createViagenTools(
           },
           body: JSON.stringify({
             taskId,
-            status: internalStatus,
+            ...(internalStatus && { status: internalStatus }),
             ...(args.prUrl && { prUrl: args.prUrl }),
             result: args.result,
             ...(args.inputTokens != null && { inputTokens: args.inputTokens }),
@@ -93,7 +94,7 @@ export function createViagenTools(
           };
         }
         return {
-          content: [{ type: "text" as const, text: `Task ${taskId} status updated to '${args.status}'.` }],
+          content: [{ type: "text" as const, text: `Task ${taskId} updated.${args.status ? ` Status: '${args.status}'.` : ""}${args.prReviewStatus ? ` PR review: '${args.prReviewStatus}'.` : ""}` }],
         };
       },
     ),
