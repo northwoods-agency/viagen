@@ -21,6 +21,7 @@ import {
   planModeCanUseTool,
   TASK_TOOLS_PROMPT,
 } from "./viagen-tools";
+import { createTask } from "viagen-sdk/sandbox";
 import type { McpServerConfig } from "@anthropic-ai/claude-agent-sdk";
 
 export interface ViagenOptions {
@@ -242,13 +243,14 @@ export function viagen(options?: ViagenOptions): Plugin {
             return;
           }
 
-          const callbackUrl = env["VIAGEN_CALLBACK_URL"];
-          const authToken = env["VIAGEN_AUTH_TOKEN"];
-          const projectId = env["VIAGEN_PROJECT_ID"];
+          const hasAuthContext = !!(
+            (env["VIAGEN_CALLBACK_URL"] || process.env["VIAGEN_CALLBACK_URL"]) &&
+            (env["VIAGEN_AUTH_TOKEN"] || process.env["VIAGEN_AUTH_TOKEN"])
+          );
 
-          if (!callbackUrl || !authToken || !projectId) {
+          if (!hasAuthContext) {
             res.writeHead(503, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: "Task creation not configured: missing VIAGEN_CALLBACK_URL, VIAGEN_AUTH_TOKEN, or VIAGEN_PROJECT_ID" }));
+            res.end(JSON.stringify({ error: "Task creation not configured: missing VIAGEN_CALLBACK_URL or VIAGEN_AUTH_TOKEN" }));
             return;
           }
 
@@ -271,32 +273,9 @@ export function viagen(options?: ViagenOptions): Plugin {
               parts.push("\n\n[Submitted via viagen preview feedback]");
               const fullPrompt = parts.join("");
 
-              const taskId = env["VIAGEN_TASK_ID"];
-              const callResult = await fetch(callbackUrl, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${authToken}`,
-                },
-                body: JSON.stringify({
-                  ...(taskId ? { taskId } : {}),
-                  action: "create_task",
-                  projectId,
-                  prompt: fullPrompt,
-                  type: "task",
-                }),
-              });
-
-              if (!callResult.ok) {
-                const text = await callResult.text().catch(() => "");
-                res.writeHead(callResult.status, { "Content-Type": "application/json" });
-                res.end(JSON.stringify({ error: "Failed to create task", detail: text }));
-                return;
-              }
-
-              const taskData = await callResult.json();
+              const task = await createTask({ prompt: fullPrompt, type: "task" });
               res.writeHead(200, { "Content-Type": "application/json" });
-              res.end(JSON.stringify(taskData));
+              res.end(JSON.stringify(task));
             } catch (err) {
               const message = err instanceof Error ? err.message : "Internal error";
               debug("preview", `preview/task error: ${message}`);
