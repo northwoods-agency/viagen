@@ -56,9 +56,9 @@ export function createViagenTools(
           .optional()
           .describe("Total cost in USD."),
         prReviewStatus: z
-          .enum(["approved", "changes_requested", "commented"])
+          .string()
           .optional()
-          .describe("PR review outcome, if applicable."),
+          .describe("PR review outcome — e.g. 'pass', 'flag', or 'fail'."),
       },
       async (args) => {
         const taskId = args.taskId || process.env["VIAGEN_TASK_ID"];
