@@ -19,6 +19,7 @@ import type { LogBuffer } from "./logger";
 import { refreshAccessToken } from "./oauth";
 import { AsyncQueue } from "./async-queue";
 import { debug } from "./debug";
+import type { ViagenClient } from "viagen-sdk";
 
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -609,7 +610,7 @@ export class ChatSession {
 export function registerChatRoutes(
   server: ViteDevServer,
   session: ChatSession,
-  opts: { env: Record<string, string> },
+  opts: { env: Record<string, string>; viagenClient?: ViagenClient; projectId?: string },
 ) {
   server.middlewares.use("/via/chat/history", (req, res) => {
     const url = new URL(req.url || "/", "http://localhost");
@@ -710,24 +711,15 @@ export function registerChatRoutes(
           res.write(`event: done\ndata: ${JSON.stringify(doneData)}\n\n`);
           res.end();
         }
-        // Report usage to viagen platform callback if in sandbox mode
-        if (opts.env["VIAGEN_CALLBACK_URL"] && opts.env["VIAGEN_AUTH_TOKEN"]) {
+        // Report usage to platform
+        if (opts.viagenClient && opts.projectId) {
           const taskId = opts.env["VIAGEN_TASK_ID"];
-          if (taskId && (event.inputTokens || event.outputTokens || event.costUsd)) {
-            fetch(opts.env["VIAGEN_CALLBACK_URL"], {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${opts.env["VIAGEN_AUTH_TOKEN"]}`,
-              },
-              body: JSON.stringify({
-                taskId,
-                ...(event.inputTokens != null && { inputTokens: event.inputTokens }),
-                ...(event.outputTokens != null && { outputTokens: event.outputTokens }),
-                ...(event.costUsd != null && { costUsd: event.costUsd }),
-              }),
+          if (taskId && (event.inputTokens || event.outputTokens)) {
+            opts.viagenClient.tasks.update(opts.projectId, taskId, {
+              ...(event.inputTokens != null && { inputTokens: event.inputTokens }),
+              ...(event.outputTokens != null && { outputTokens: event.outputTokens }),
             }).catch((err) => {
-              debug("chat", `usage callback failed: ${err}`);
+              debug("chat", `usage report failed: ${err}`);
             });
           }
         }
