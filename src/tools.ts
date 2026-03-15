@@ -5,26 +5,23 @@ import {
   type McpSdkServerConfigWithInstance,
   type CanUseTool,
 } from "@anthropic-ai/claude-agent-sdk";
-import {
-  listTasks,
-  getTask,
-  createTask,
-} from "viagen-sdk/sandbox";
+import type { ViagenClient } from "viagen-sdk";
 
 export interface ViagenToolsConfig {
-  projectId?: string;
+  client: ViagenClient;
+  projectId: string;
 }
 
 /**
- * Creates an in-process MCP tool server that exposes platform reporting tools.
- * Used when running inside a viagen sandbox (VIAGEN_CALLBACK_URL etc. are set).
- *
- * When `config` is provided, also exposes task CRUD tools (list, get, create)
- * via the sandbox callback proxy.
+ * Creates an in-process MCP tool server that exposes platform task tools.
+ * Uses the ViagenClient SDK to communicate directly with the platform API.
  */
 export function createViagenTools(
-  config?: ViagenToolsConfig,
+  config: ViagenToolsConfig,
 ): McpSdkServerConfigWithInstance {
+  const { client, projectId } = config;
+  const taskId = process.env["VIAGEN_TASK_ID"];
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tools: any[] = [
     tool(
@@ -56,132 +53,113 @@ export function createViagenTools(
           .optional()
           .describe("Total cost in USD."),
         prReviewStatus: z
-          .enum(["approved", "changes_requested", "commented"])
+          .string()
           .optional()
-          .describe("PR review outcome, if applicable."),
+          .describe("PR review outcome — e.g. 'pass', 'flag', or 'fail'."),
       },
       async (args) => {
-        const taskId = args.taskId || process.env["VIAGEN_TASK_ID"];
-        if (!taskId) {
+        const id = args.taskId || taskId;
+        if (!id) {
           return {
             content: [{ type: "text" as const, text: "Error: No taskId provided and VIAGEN_TASK_ID is not set." }],
           };
         }
-        const callbackUrl = process.env["VIAGEN_CALLBACK_URL"]!;
-        const authToken = process.env["VIAGEN_AUTH_TOKEN"]!;
         const internalStatus = args.status === "review" ? "validating" : args.status === "completed" ? "completed" : args.status;
-        const res = await fetch(callbackUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${authToken}`,
-          },
-          body: JSON.stringify({
-            taskId,
+        try {
+          await client.tasks.update(projectId, id, {
             ...(internalStatus && { status: internalStatus }),
             ...(args.prUrl && { prUrl: args.prUrl }),
             result: args.result,
             ...(args.inputTokens != null && { inputTokens: args.inputTokens }),
             ...(args.outputTokens != null && { outputTokens: args.outputTokens }),
-            ...(args.costUsd != null && { costUsd: args.costUsd }),
             ...(args.prReviewStatus && { prReviewStatus: args.prReviewStatus }),
-          }),
-        });
-        if (!res.ok) {
-          const text = await res.text().catch(() => "");
+          });
           return {
-            content: [{ type: "text" as const, text: `Error updating task (${res.status}): ${text}` }],
+            content: [{ type: "text" as const, text: `Task ${id} updated.${args.status ? ` Status: '${args.status}'.` : ""}${args.prReviewStatus ? ` PR review: '${args.prReviewStatus}'.` : ""}` }],
+          };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Unknown error";
+          return {
+            content: [{ type: "text" as const, text: `Error updating task: ${message}` }],
           };
         }
+      },
+    ),
+
+    tool(
+      "viagen_list_tasks",
+      "List tasks in the current project. Optionally filter by status.",
+      {
+        status: z
+          .enum(["ready", "running", "validating", "completed", "timed_out"])
+          .optional()
+          .describe("Filter tasks by status."),
+      },
+      async (args) => {
+        const tasks = await client.tasks.list(projectId, args.status);
         return {
-          content: [{ type: "text" as const, text: `Task ${taskId} updated.${args.status ? ` Status: '${args.status}'.` : ""}${args.prReviewStatus ? ` PR review: '${args.prReviewStatus}'.` : ""}` }],
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(tasks, null, 2),
+            },
+          ],
+        };
+      },
+    ),
+
+    tool(
+      "viagen_get_task",
+      "Get full details of a specific task by ID.",
+      {
+        taskId: z.string().describe("The task ID to retrieve."),
+      },
+      async (args) => {
+        const task = await client.tasks.get(projectId, args.taskId);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(task, null, 2),
+            },
+          ],
+        };
+      },
+    ),
+
+    tool(
+      "viagen_create_task",
+      "Create a new task in the current project. Use this to create follow-up work.",
+      {
+        prompt: z
+          .string()
+          .describe("The task prompt / instructions."),
+        branch: z
+          .string()
+          .optional()
+          .describe("Git branch name for the task."),
+        type: z
+          .enum(["task", "plan"])
+          .optional()
+          .describe("Task type: 'task' for code changes, 'plan' for implementation plans."),
+      },
+      async (args) => {
+        const task = await client.tasks.create(projectId, {
+          prompt: args.prompt,
+          branch: args.branch,
+          type: args.type,
+        });
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(task, null, 2),
+            },
+          ],
         };
       },
     ),
   ];
-
-  // Add CRUD tools when project context is available
-  if (config?.projectId) {
-    tools.push(
-      tool(
-        "viagen_list_tasks",
-        "List tasks in the current project. Optionally filter by status.",
-        {
-          status: z
-            .enum(["ready", "running", "validating", "completed", "timed_out"])
-            .optional()
-            .describe("Filter tasks by status."),
-        },
-        async (args) => {
-          const tasks = await listTasks({ status: args.status });
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify(tasks, null, 2),
-              },
-            ],
-          };
-        },
-      ),
-    );
-
-    tools.push(
-      tool(
-        "viagen_get_task",
-        "Get full details of a specific task by ID.",
-        {
-          taskId: z.string().describe("The task ID to retrieve."),
-        },
-        async (args) => {
-          const task = await getTask(args.taskId);
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify(task, null, 2),
-              },
-            ],
-          };
-        },
-      ),
-    );
-
-    tools.push(
-      tool(
-        "viagen_create_task",
-        "Create a new task in the current project. Use this to create follow-up work.",
-        {
-          prompt: z
-            .string()
-            .describe("The task prompt / instructions."),
-          branch: z
-            .string()
-            .optional()
-            .describe("Git branch name for the task."),
-          type: z
-            .enum(["task", "plan"])
-            .optional()
-            .describe("Task type: 'task' for code changes, 'plan' for implementation plans."),
-        },
-        async (args) => {
-          const task = await createTask({
-            prompt: args.prompt,
-            branch: args.branch,
-            type: args.type,
-          });
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify(task, null, 2),
-              },
-            ],
-          };
-        },
-      ),
-    );
-  }
 
   return createSdkMcpServer({ name: "viagen", tools });
 }

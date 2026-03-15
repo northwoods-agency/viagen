@@ -3,7 +3,7 @@ import {
   planModeCanUseTool,
   PLAN_MODE_DISALLOWED_TOOLS,
   PLAN_SYSTEM_PROMPT,
-} from "./viagen-tools";
+} from "./tools";
 
 describe("plan mode — disallowed tools", () => {
   it("disallows Edit and NotebookEdit", () => {

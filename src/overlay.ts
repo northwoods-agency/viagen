@@ -140,7 +140,7 @@ export function buildPreviewScript(): string {
       var payload = {
         prompt: feedback,
         pageUrl: window.location.href,
-        hasScreenshot: !!screenshotDataUrl,
+        screenshot: screenshotDataUrl || undefined,
       };
 
       fetch('/via/preview/task', {

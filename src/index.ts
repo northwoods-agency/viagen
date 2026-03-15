@@ -20,8 +20,8 @@ import {
   PLAN_MODE_DISALLOWED_TOOLS,
   planModeCanUseTool,
   TASK_TOOLS_PROMPT,
-} from "./viagen-tools";
-import { createTask } from "viagen-sdk/sandbox";
+} from "./tools";
+import { createViagen, type ViagenClient } from "viagen-sdk";
 import type { McpServerConfig } from "@anthropic-ai/claude-agent-sdk";
 
 export interface ViagenOptions {
@@ -78,7 +78,7 @@ export function viagen(options?: ViagenOptions): Plugin {
     name: "viagen",
     config(_, { mode }) {
       const e = loadEnv(mode, process.cwd(), "");
-      if (e["VIAGEN_AUTH_TOKEN"]) {
+      if (e["VIAGEN_AUTH_TOKEN"] || e["VIAGEN_USER_TOKEN"]) {
         return { server: { host: true, allowedHosts: true as const } };
       }
     },
@@ -98,6 +98,7 @@ export function viagen(options?: ViagenOptions): Plugin {
       debug("init", `CLAUDE_ACCESS_TOKEN: ${env["CLAUDE_ACCESS_TOKEN"] ? "set" : "NOT SET"}`);
       debug("init", `GITHUB_TOKEN: ${env["GITHUB_TOKEN"] ? "set" : "NOT SET"}`);
       debug("init", `VIAGEN_AUTH_TOKEN: ${env["VIAGEN_AUTH_TOKEN"] ? "set" : "NOT SET"}`);
+      debug("init", `VIAGEN_USER_TOKEN: ${env["VIAGEN_USER_TOKEN"] ? "set" : "NOT SET"}`);
       debug("init", `VIAGEN_MODEL: ${env["VIAGEN_MODEL"] || "(not set)"}`);
       debug("init", `VIAGEN_PROMPT: ${env["VIAGEN_PROMPT"] ? `"${env["VIAGEN_PROMPT"].slice(0, 80)}..."` : "(not set)"}`);
       debug("init", `VIAGEN_TASK_ID: ${env["VIAGEN_TASK_ID"] || "(not set)"}`);
@@ -189,13 +190,23 @@ export function viagen(options?: ViagenOptions): Plugin {
         }
       }
 
-      // Auth middleware — only when VIAGEN_AUTH_TOKEN is set
+      // Auth middleware — only when VIAGEN_AUTH_TOKEN is set (sandbox mode)
       const authToken = env["VIAGEN_AUTH_TOKEN"];
       if (authToken) {
         debug("server", "auth middleware enabled (VIAGEN_AUTH_TOKEN set)");
         server.middlewares.use(createAuthMiddleware(authToken));
       } else {
         debug("server", "auth middleware DISABLED (no VIAGEN_AUTH_TOKEN)");
+      }
+
+      // Platform SDK client — used for task CRUD and usage reporting
+      const platformToken = env["VIAGEN_USER_TOKEN"] || env["VIAGEN_AUTH_TOKEN"];
+      const platformUrl = env["VIAGEN_PLATFORM_URL"] || "https://app.viagen.dev";
+      const projectId = env["VIAGEN_PROJECT_ID"];
+      let viagenClient: ViagenClient | null = null;
+      if (platformToken) {
+        viagenClient = createViagen({ token: platformToken, baseUrl: platformUrl });
+        debug("server", `platform client created (baseUrl: ${platformUrl})`);
       }
 
       const hasEditor = !!(options?.editable && options.editable.length > 0);
@@ -243,14 +254,9 @@ export function viagen(options?: ViagenOptions): Plugin {
             return;
           }
 
-          const hasAuthContext = !!(
-            (env["VIAGEN_CALLBACK_URL"] || process.env["VIAGEN_CALLBACK_URL"]) &&
-            (env["VIAGEN_AUTH_TOKEN"] || process.env["VIAGEN_AUTH_TOKEN"])
-          );
-
-          if (!hasAuthContext) {
+          if (!viagenClient || !projectId) {
             res.writeHead(503, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: "Task creation not configured: missing VIAGEN_CALLBACK_URL or VIAGEN_AUTH_TOKEN" }));
+            res.end(JSON.stringify({ error: "Task creation not configured: missing platform credentials or VIAGEN_PROJECT_ID" }));
             return;
           }
 
@@ -258,8 +264,8 @@ export function viagen(options?: ViagenOptions): Plugin {
           req.on("data", (chunk: Buffer) => { body += chunk.toString(); });
           req.on("end", async () => {
             try {
-              const data = JSON.parse(body) as { prompt?: string; pageUrl?: string; hasScreenshot?: boolean };
-              const { prompt, pageUrl, hasScreenshot } = data;
+              const data = JSON.parse(body) as { prompt?: string; pageUrl?: string; screenshot?: string };
+              const { prompt, pageUrl, screenshot } = data;
 
               if (!prompt || typeof prompt !== "string") {
                 res.writeHead(400, { "Content-Type": "application/json" });
@@ -269,13 +275,30 @@ export function viagen(options?: ViagenOptions): Plugin {
 
               const parts = [prompt.trim()];
               if (pageUrl) parts.push(`\nPage URL: ${pageUrl}`);
-              if (hasScreenshot) parts.push("\n[Screenshot was captured at time of submission]");
+              if (screenshot) parts.push("\n[Screenshot attached]");
               parts.push("\n\n[Submitted via viagen preview feedback]");
               const fullPrompt = parts.join("");
 
-              const task = await createTask({ prompt: fullPrompt, type: "task" });
+              const task = await viagenClient!.tasks.create(projectId!, { prompt: fullPrompt, type: "task" });
+
+              // Upload screenshot as attachment if provided
+              if (screenshot && task.id) {
+                try {
+                  // Convert data URL to Blob
+                  const [header, b64] = screenshot.split(",");
+                  const mime = header.match(/:(.*?);/)?.[1] || "image/jpeg";
+                  const binary = Buffer.from(b64, "base64");
+                  const blob = new Blob([binary], { type: mime });
+                  const ext = mime === "image/png" ? "png" : "jpeg";
+                  await viagenClient!.tasks.addAttachment(projectId!, task.id, blob, `screenshot.${ext}`);
+                  debug("preview", `screenshot attached to task ${task.id}`);
+                } catch (attachErr) {
+                  debug("preview", `screenshot attachment failed (non-fatal): ${attachErr}`);
+                }
+              }
+
               res.writeHead(200, { "Content-Type": "application/json" });
-              res.end(JSON.stringify(task));
+              res.end(JSON.stringify({ task }));
             } catch (err) {
               const message = err instanceof Error ? err.message : "Internal error";
               debug("preview", `preview/task error: ${message}`);
@@ -295,16 +318,15 @@ export function viagen(options?: ViagenOptions): Plugin {
       const resolvedModel = env["VIAGEN_MODEL"] || opts.model;
       debug("server", `creating ChatSession (model: ${resolvedModel})`);
 
-      // MCP tools — created when running inside a viagen sandbox with task context
+      // MCP tools — created when platform client and project ID are available
       let mcpServers: Record<string, McpServerConfig> | undefined;
-      const hasSandboxContext = !!(env["VIAGEN_CALLBACK_URL"] && env["VIAGEN_AUTH_TOKEN"]);
-      if (hasSandboxContext) {
-        debug("server", "creating viagen MCP tools (sandbox mode)");
-        const viagenMcp = createViagenTools(
-          env["VIAGEN_PROJECT_ID"]
-            ? { projectId: env["VIAGEN_PROJECT_ID"] }
-            : undefined,
-        );
+      const hasPlatformContext = !!(viagenClient && projectId);
+      if (hasPlatformContext) {
+        debug("server", "creating viagen MCP tools (platform connected)");
+        const viagenMcp = createViagenTools({
+          client: viagenClient!,
+          projectId: projectId!,
+        });
         mcpServers = { [viagenMcp.name]: viagenMcp };
       }
 
@@ -315,7 +337,7 @@ export function viagen(options?: ViagenOptions): Plugin {
       if (isPlanMode) {
         debug("server", "plan mode active — restricting tools");
         systemPrompt = PLAN_SYSTEM_PROMPT;
-      } else if (hasSandboxContext && env["VIAGEN_PROJECT_ID"]) {
+      } else if (hasPlatformContext) {
         systemPrompt = (systemPrompt || "") + TASK_TOOLS_PROMPT;
       }
 
@@ -336,7 +358,11 @@ export function viagen(options?: ViagenOptions): Plugin {
 
       // Chat routes
       debug("server", "registering chat routes");
-      registerChatRoutes(server, chatSession, { env });
+      registerChatRoutes(server, chatSession, {
+        env,
+        viagenClient: viagenClient ?? undefined,
+        projectId,
+      });
 
       // File editor routes
       if (hasEditor) {
@@ -362,23 +388,14 @@ export function viagen(options?: ViagenOptions): Plugin {
           if (event.type === "done") {
             debug("server", "auto-prompt completed");
             logBuffer.push("info", `[viagen] Prompt completed`);
-            // Report usage to platform callback
-            const taskId = env["VIAGEN_TASK_ID"];
-            if (hasSandboxContext && taskId && (event.inputTokens || event.outputTokens || event.costUsd)) {
-              fetch(env["VIAGEN_CALLBACK_URL"], {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${env["VIAGEN_AUTH_TOKEN"]}`,
-                },
-                body: JSON.stringify({
-                  taskId,
-                  ...(event.inputTokens != null && { inputTokens: event.inputTokens }),
-                  ...(event.outputTokens != null && { outputTokens: event.outputTokens }),
-                  ...(event.costUsd != null && { costUsd: event.costUsd }),
-                }),
+            // Report usage to platform
+            const currentTaskId = env["VIAGEN_TASK_ID"];
+            if (viagenClient && projectId && currentTaskId && (event.inputTokens || event.outputTokens)) {
+              viagenClient.tasks.update(projectId, currentTaskId, {
+                ...(event.inputTokens != null && { inputTokens: event.inputTokens }),
+                ...(event.outputTokens != null && { outputTokens: event.outputTokens }),
               }).catch((err) => {
-                debug("server", `usage callback failed: ${err}`);
+                debug("server", `usage report failed: ${err}`);
               });
             }
           }
