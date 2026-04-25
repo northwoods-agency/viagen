@@ -6,7 +6,11 @@ A Vite dev server plugin and CLI tool that enables you to use Claude Code in a s
 
 - [Claude](https://claude.ai/signup) — Max, Pro, or API plan. The setup wizard handles auth.
 - [Vercel](https://vercel.com/signup) — Free plan works. Sandboxes last 45 min on Hobby, 5 hours on Pro.
+
+## Suggested
+
 - [GitHub CLI](https://cli.github.com) — Enables git clone and push from sandboxes.
+- [Fling](https://flingit.io/) — Enables Claude to deploy shareable previews from the sandbox.
 
 ## Quick Setup (Claude Code Plugin)
 
